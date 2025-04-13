@@ -78,7 +78,9 @@ public class JudgeServer {
             final int caseValue = cases.get(i);
             Runnable task = () -> {
                 try {
+                    Thread.sleep(10); // 模拟编译时间耗时
                     results[i] = nQueenSolver.run(caseValue);
+                    Thread.sleep(10); // 模拟持久化时间耗时
                 } catch (Exception e) {
                     System.err.println("任务执行出错 (case " + caseValue + "): " + e.getMessage());
                 } finally {
