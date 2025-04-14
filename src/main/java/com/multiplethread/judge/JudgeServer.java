@@ -21,10 +21,9 @@ public class JudgeServer {
      * 运行评测 (兼容单线程和原始多线程)
      * @param cases 测试用例
      * @param useMultipleThread 是否使用多线程 (非线程池)
-     * @param useThreadPool (忽略)
      * @return 评测结果
      */
-    public int[] run(List<Integer> cases, boolean useMultipleThread, boolean useThreadPool) {
+    public int[] runWithOriginalMultiThread(List<Integer> cases, boolean useMultipleThread) {
         int[] results = new int[cases.size()];
         
         if (useMultipleThread) {

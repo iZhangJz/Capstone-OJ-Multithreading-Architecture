@@ -43,7 +43,7 @@ public class JudgeController {
         long startTime = System.currentTimeMillis();
         
         List<Integer> cases = generateTestCases(n);
-        int[] results = judgeServer.run(cases, false, false);
+        int[] results = judgeServer.runWithOriginalMultiThread(cases, false);
         
         long executionTime = System.currentTimeMillis() - startTime;
         
@@ -66,7 +66,7 @@ public class JudgeController {
         long startTime = System.currentTimeMillis();
         
         List<Integer> cases = generateTestCases(n);
-        int[] results = judgeServer.run(cases, true, false);
+        int[] results = judgeServer.runWithOriginalMultiThread(cases, true);
         
         long executionTime = System.currentTimeMillis() - startTime;
         
