@@ -2,7 +2,6 @@ package com.multiplethread.judge;
 import java.util.*;
 import java.util.concurrent.*;
 import com.multiplethread.model.ThreadPoolArgs;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 import java.util.stream.Collectors;

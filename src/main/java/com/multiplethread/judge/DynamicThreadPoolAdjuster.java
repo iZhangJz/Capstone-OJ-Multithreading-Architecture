@@ -27,7 +27,7 @@ public class DynamicThreadPoolAdjuster {
     // 线性增加步长（每次增加的核心线程数）
     private static final int CORE_POOL_INCREMENT_STEP = 1;
     // CPU利用率高阈值（超过此值认为系统CPU负载较高）
-    private static final double HIGH_CPU_THRESHOLD = 0.8; // 80%
+    private static final double HIGH_CPU_THRESHOLD = 0.5; // 50%
     // CPU利用率低阈值（低于此值认为系统CPU负载较低）
     private static final double LOW_CPU_THRESHOLD = 0.2; // 20%
     // 内存利用率高阈值（超过此值认为系统内存压力较大）
