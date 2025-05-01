@@ -26,7 +26,23 @@ public class MonitoredTask implements Runnable {
         this.submissionTimeNanos = submissionTimeNanos;
         this.monitor = monitor;
         // Log creation
-        // log.trace("MonitoredTask created for: {} with submission time: {}", actualTask, submissionTimeNanos); 
+        // log.trace("MonitoredTask created for: {} with submission time: {}", actualTask, submissionTimeNanos);
+    }
+
+    /**
+     * 获取实际任务
+     * @return 实际要执行的任务
+     */
+    protected Runnable getActualTask() {
+        return actualTask;
+    }
+
+    /**
+     * 获取线程池监控器
+     * @return 线程池监控器实例
+     */
+    protected ThreadPoolMonitor getMonitor() {
+        return monitor;
     }
 
     @Override
@@ -40,21 +56,30 @@ public class MonitoredTask implements Runnable {
         } catch (Throwable t) {
             // Log failure before recording
             log.error("Task execution failed for: {}", actualTask, t);
-            monitor.recordTaskFailure();
-            throw t; 
+            // 添加空指针检查
+            if (monitor != null) {
+                monitor.recordTaskFailure();
+            } else {
+                log.error("监控器为null，无法记录任务失败");
+            }
+            throw t;
         } finally {
             long endTimeNanos = System.nanoTime();
             long executionTimeNanos = endTimeNanos - startTimeNanos;
             // long execMillis = TimeUnit.NANOSECONDS.toMillis(executionTimeNanos); // No longer needed here
             // long waitMillis = TimeUnit.NANOSECONDS.toMillis(waitTimeNanos); // No longer needed here
-            
+
             // Log calculated times before recording
             log.debug("MonitoredTask finished. WaitNanos: {}, ExecNanos: {}. Calling recordTaskTimings (with nanos).",
                      waitTimeNanos, executionTimeNanos);
-                     
-            // Pass nanosecond values directly to the monitor
-            monitor.recordTaskTimings(executionTimeNanos, waitTimeNanos);
-            log.trace("Called monitor.recordTaskTimings for: {}", actualTask);
+
+            // Pass nanosecond values directly to the monitor (添加空指针检查)
+            if (monitor != null) {
+                monitor.recordTaskTimings(executionTimeNanos, waitTimeNanos);
+                log.trace("Called monitor.recordTaskTimings for: {}", actualTask);
+            } else {
+                log.error("监控器为null，无法记录任务时间");
+            }
         }
     }
-} 
+}

@@ -3,7 +3,8 @@ package com.multiplethread.judge;
 import com.multiplethread.model.ThreadPoolArgs;
 // import jakarta.annotation.PreDestroy; // 使用 javax 替代
 import javax.annotation.PreDestroy;     // 导入 javax.annotation.PreDestroy
-import org.springframework.beans.factory.annotation.Autowired;
+import javax.annotation.Resource;
+
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.*;
@@ -16,11 +17,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Component
 public class ThreadPoolManager {
 
-    @Autowired
+    @Resource
     private ThreadPoolMonitor threadPoolMonitor;
 
     // 持有主线程池实例
     private ThreadPoolExecutor mainExecutor;
+    
+    // 超时检查器线程池
+    private ScheduledExecutorService timeoutExecutor;
     
     // 线程工厂，用于创建线程并命名
     private static class JudgeThreadFactory implements ThreadFactory {
@@ -69,6 +73,14 @@ public class ThreadPoolManager {
                                                           executor.toString());
                     }
             );
+            
+            // 初始化超时检查器线程池
+            if (this.timeoutExecutor == null || this.timeoutExecutor.isShutdown()) {
+                this.timeoutExecutor = Executors.newScheduledThreadPool(
+                    2, // 只需要少量线程进行超时检查
+                    new JudgeThreadFactory("timeout-checker-pool")
+                );
+            }
         } else {
             System.out.println("主线程池已初始化。");
         }
@@ -104,11 +116,42 @@ public class ThreadPoolManager {
     }
     
     /**
+     * 提交带超时的任务到主线程池
+     * @param task 要执行的任务
+     * @param timeoutMillis 超时时间（毫秒）
+     */
+    public void submitTaskWithTimeout(Runnable task, long timeoutMillis) {
+        ThreadPoolExecutor executor = getMainExecutor();
+        if (executor == null || executor.isShutdown()) {
+            System.err.println("主线程池未初始化或已关闭，无法提交任务");
+            return;
+        }
+        
+        // 确保超时检查器线程池已初始化
+        if (this.timeoutExecutor == null || this.timeoutExecutor.isShutdown()) {
+            this.timeoutExecutor = Executors.newScheduledThreadPool(
+                2,
+                new JudgeThreadFactory("timeout-checker-pool")
+            );
+        }
+        
+        long submissionTimeNanos = System.nanoTime();
+        TimedTask timedTask = new TimedTask(task, submissionTimeNanos, threadPoolMonitor, 
+                                          timeoutMillis, timeoutExecutor);
+        try {
+            executor.execute(timedTask);
+        } catch (RejectedExecutionException e) {
+            System.err.println("任务提交被拒绝: " + e.getMessage());
+        }
+    }
+    
+    /**
      * 关闭主线程池（在应用关闭时调用）
      */
     @PreDestroy
     public void shutdownMainExecutor() {
         shutdownThreadPool(this.mainExecutor);
+        shutdownThreadPool(this.timeoutExecutor);
     }
 
     /**

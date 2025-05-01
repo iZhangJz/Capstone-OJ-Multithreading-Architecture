@@ -102,6 +102,15 @@ public class ThreadPoolMonitor {
     }
 
     /**
+     * 记录任务超时
+     */
+    public void recordTaskTimeout() {
+        log.warn("Task timed out and was interrupted");
+        // 任务超时也算作失败
+        recordTaskFailure();
+    }
+
+    /**
      * 重置监控数据
      */
     public void reset() {
@@ -168,11 +177,20 @@ public class ThreadPoolMonitor {
 
         double gamma = (avgExecTimeMillis > 0) ? (double) avgWaitTimeMillis / avgExecTimeMillis : 0.0;
 
-        // 获取系统资源利用率
-        double systemCpuUsage = systemResourceMonitor.getSystemCpuUsage();
-        double processCpuUsage = systemResourceMonitor.getProcessCpuUsage();
-        double systemMemoryUsage = systemResourceMonitor.getSystemMemoryUsage();
-        double jvmMemoryUsage = systemResourceMonitor.getJvmMemoryUsage();
+        // 获取系统资源利用率（添加空指针检查）
+        double systemCpuUsage = 0.0;
+        double processCpuUsage = 0.0;
+        double systemMemoryUsage = 0.0;
+        double jvmMemoryUsage = 0.0;
+
+        if (systemResourceMonitor != null) {
+            systemCpuUsage = systemResourceMonitor.getSystemCpuUsage();
+            processCpuUsage = systemResourceMonitor.getProcessCpuUsage();
+            systemMemoryUsage = systemResourceMonitor.getSystemMemoryUsage();
+            jvmMemoryUsage = systemResourceMonitor.getJvmMemoryUsage();
+        } else {
+            log.warn("systemResourceMonitor为null，无法获取系统资源利用率");
+        }
 
         log.debug("Generating report: AvgExecTimeMillis={}, AvgWaitTimeMillis={}, Gamma={}, TaskCount={}, CPU={}, Memory={}",
                   avgExecTimeMillis, avgWaitTimeMillis, String.format("%.3f", gamma), taskCount,

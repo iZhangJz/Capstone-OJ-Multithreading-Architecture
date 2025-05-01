@@ -100,4 +100,62 @@ public class JudgeServer {
         // 不需要在这里关闭线程池，由 ThreadPoolManager 的 @PreDestroy 管理
         return results;
     }
+    
+    /**
+     * 使用带有超时功能的线程池运行评测
+     * @param cases 测试用例列表
+     * @param timeoutMillis 每个任务的超时时间（毫秒）
+     * @return 评测结果数组
+     */
+    public int[] runWithTimeoutThreadPool(List<Integer> cases, long timeoutMillis) {
+        int n = cases.size();
+        int[] results = new int[n];
+        
+        // 用-1初始化结果数组，表示任务未完成或超时
+        Arrays.fill(results, -1);
+        
+        CountDownLatch latch = new CountDownLatch(n);
+
+        // 确保线程池已初始化
+        ThreadPoolExecutor executor = threadPoolManager.getMainExecutor();
+        if (executor == null) {
+             System.err.println("警告：主线程池在 JudgeServer 中发现未初始化。");
+             threadPoolManager.initializeMainExecutor(ThreadPoolArgs.DYNAMIC_INITIAL);
+             executor = threadPoolManager.getMainExecutor();
+             if(executor == null) {
+                throw new IllegalStateException("无法初始化主线程池！");
+             } 
+        }
+
+        IntStream.range(0, n).forEach(i -> {
+            final int caseValue = cases.get(i);
+            Runnable task = () -> {
+                try {
+                    Thread.sleep(10); // 模拟编译时间耗时
+                    results[i] = nQueenSolver.run(caseValue);
+                    Thread.sleep(10); // 模拟持久化时间耗时
+                } catch (InterruptedException e) {
+                    // 任务被中断，可能是因为超时
+                    System.err.println("任务被中断 (case " + caseValue + "): 可能是因为超时");
+                    Thread.currentThread().interrupt();
+                } catch (Exception e) {
+                    System.err.println("任务执行出错 (case " + caseValue + "): " + e.getMessage());
+                } finally {
+                    latch.countDown();
+                }
+            };
+            // 使用 ThreadPoolManager 提交带超时的任务
+            threadPoolManager.submitTaskWithTimeout(task, timeoutMillis);
+        });
+
+        try {
+            // 等待所有任务完成或超时
+            latch.await(); 
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            System.err.println("等待超时线程池评测完成时被中断");
+        }
+        
+        return results;
+    }
 }
