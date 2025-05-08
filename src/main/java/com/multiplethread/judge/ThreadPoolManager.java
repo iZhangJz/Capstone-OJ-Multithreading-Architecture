@@ -188,11 +188,4 @@ public class ThreadPoolManager {
         }
         return threadPoolMonitor.getReport(executor);
     }
-
-    // 移除旧的 getThreadPoolStatus 方法，用 getMainThreadPoolStatusReport 替代
-    /*
-    public String getThreadPoolStatus(ThreadPoolExecutor executor) {
-        // ...
-    }
-    */
 } 

@@ -36,11 +36,6 @@ public class ThreadPoolMonitor {
     // 任务异常计数器
     private final AtomicLong failedTasks = new AtomicLong(0);
 
-    // 用于存储任务提交时间，以便计算等待时间
-    // 注意：这需要与执行器的 beforeExecute/afterExecute 配合使用
-    // 或者在提交任务时进行包装
-    // private final ConcurrentMap<Runnable, Long> submissionTimes = new ConcurrentHashMap<>();
-
     /**
      * 记录任务执行时间和等待时间 (纳秒)
      * @param executionTimeNanos 执行时间（纳秒）

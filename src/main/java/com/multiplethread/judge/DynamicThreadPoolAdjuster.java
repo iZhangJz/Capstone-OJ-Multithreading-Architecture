@@ -44,9 +44,9 @@ public class DynamicThreadPoolAdjuster {
 
     /**
      * 定时任务，定期检查并调整线程池参数
-     * fixedDelayString = "PT10S" 表示每隔 10 秒执行一次
+     * fixedDelayString = "PT5S" 表示每隔 5 秒执行一次
      */
-    @Scheduled(fixedDelayString = "PT10S") // 使用 ISO 8601 持续时间格式
+    @Scheduled(fixedDelayString = "PT5S") // 使用 ISO 8601 持续时间格式
     public void adjustThreadPool() {
         ThreadPoolExecutor executor = threadPoolManager.getMainExecutor();
         if (executor == null || executor.isShutdown()) {
