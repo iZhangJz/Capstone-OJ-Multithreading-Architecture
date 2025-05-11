@@ -10,4 +10,4 @@ target/
 call-graph.tex
 src/main/resources
 .cursor/
-src/main/java/com/multiplethread/jmeter/results/report  
+src/main/java/com/multiplethread/jmeter/results

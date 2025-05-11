@@ -184,7 +184,6 @@ public class JudgeController {
         Map<String, Object> response = new HashMap<>();
         response.put("requestId", System.currentTimeMillis()); // 提供给JMeter提取器的ID
         response.put("results", results);
-        response.put("executionTime", executionTime);  // 包括请求处理的总时间
         response.put("processingTime", processingTime); // 纯计算处理时间
         response.put("mode", mode);
         response.put("type", type);
@@ -192,151 +191,14 @@ public class JudgeController {
         response.put("size", size);
         response.put("threadModel", threadModel);
         
-        // 添加常见指标（这些指标在任何线程模型下都可用）
-        Map<String, Object> basicMetrics = new HashMap<>();
-        basicMetrics.put("totalTasks", size);
-        basicMetrics.put("avgTaskTime", processingTime / (size > 0 ? size : 1));
-        
         // 如果使用动态线程池，添加详细的监控报告和关键性能指标
         if (monitorReport != null) {
             response.put("monitorReport", monitorReport);
-            
-            // 提取关键性能指标并添加到响应中
-            Map<String, Object> detailedMetrics = extractMetricsFromReport(monitorReport);
-            if (detailedMetrics != null && !detailedMetrics.isEmpty()) {
-                // 合并基本指标和详细指标
-                basicMetrics.putAll(detailedMetrics);
-            }
         }
-        
-        // 添加性能指标到响应
-        response.put("metrics", basicMetrics);
         
         return response;
     }
     
-    /**
-     * 从监控报告中提取关键性能指标
-     * 
-     * @param report 线程池监控报告
-     * @return 包含关键性能指标的Map
-     */
-    private Map<String, Object> extractMetricsFromReport(String report) {
-        if (report == null || report.isEmpty()) {
-            return null;
-        }
-        
-        Map<String, Object> metrics = new HashMap<>();
-        
-        try {
-            // 解析监控报告中的关键指标
-            String[] lines = report.split("\n");
-            for (String line : lines) {
-                line = line.trim();
-                
-                // 任务数量
-                if (line.startsWith("统计周期内任务数:")) {
-                    String value = line.substring(line.indexOf(":") + 1).trim();
-                    metrics.put("totalTasks", Integer.parseInt(value));
-                }
-                
-                // 平均执行时间
-                else if (line.startsWith("平均执行时间:")) {
-                    String value = line.substring(line.indexOf(":") + 1, line.indexOf("ms")).trim();
-                    metrics.put("avgExecutionTime", Long.parseLong(value));
-                }
-                
-                // 平均等待时间
-                else if (line.startsWith("平均等待时间:")) {
-                    String value = line.substring(line.indexOf(":") + 1, line.indexOf("ms")).trim();
-                    metrics.put("avgWaitTime", Long.parseLong(value));
-                }
-                
-                // 资源竞争系数
-                else if (line.startsWith("资源竞争系数")) {
-                    String value = line.substring(line.indexOf(":") + 1).trim();
-                    metrics.put("gamma", Double.parseDouble(value));
-                }
-                
-                // 最大执行时间
-                else if (line.startsWith("最大执行时间:")) {
-                    String value = line.substring(line.indexOf(":") + 1, line.indexOf("ms")).trim();
-                    metrics.put("maxExecutionTime", Long.parseLong(value));
-                }
-                
-                // 最小执行时间
-                else if (line.startsWith("最小执行时间:")) {
-                    String value = line.substring(line.indexOf(":") + 1, line.indexOf("ms")).trim();
-                    metrics.put("minExecutionTime", Long.parseLong(value));
-                }
-                
-                // 拒绝任务数
-                else if (line.startsWith("拒绝任务数:")) {
-                    String value = line.substring(line.indexOf(":") + 1).trim();
-                    metrics.put("rejectedTasks", Long.parseLong(value));
-                }
-                
-                // 失败任务数
-                else if (line.startsWith("失败任务数:")) {
-                    String value = line.substring(line.indexOf(":") + 1).trim();
-                    metrics.put("failedTasks", Long.parseLong(value));
-                }
-                
-                // 系统CPU利用率
-                else if (line.startsWith("系统CPU利用率:")) {
-                    String value = line.substring(line.indexOf(":") + 1, line.indexOf("%")).trim();
-                    metrics.put("systemCpuUsage", Double.parseDouble(value));
-                }
-                
-                // JVM进程CPU利用率
-                else if (line.startsWith("JVM进程CPU利用率:")) {
-                    String value = line.substring(line.indexOf(":") + 1, line.indexOf("%")).trim();
-                    metrics.put("processCpuUsage", Double.parseDouble(value));
-                }
-                
-                // 系统内存利用率
-                else if (line.startsWith("系统内存利用率:")) {
-                    String value = line.substring(line.indexOf(":") + 1, line.indexOf("%")).trim();
-                    metrics.put("systemMemoryUsage", Double.parseDouble(value));
-                }
-                
-                // JVM内存利用率
-                else if (line.startsWith("JVM内存利用率:")) {
-                    String value = line.substring(line.indexOf(":") + 1, line.indexOf("%")).trim();
-                    metrics.put("jvmMemoryUsage", Double.parseDouble(value));
-                }
-                
-                // 活跃线程数
-                else if (line.startsWith("活跃线程数:")) {
-                    String value = line.substring(line.indexOf(":") + 1).trim();
-                    metrics.put("activeThreads", Integer.parseInt(value));
-                }
-                
-                // 当前线程数
-                else if (line.startsWith("当前线程数:")) {
-                    String value = line.substring(line.indexOf(":") + 1).trim();
-                    metrics.put("poolSize", Integer.parseInt(value));
-                }
-                
-                // 核心线程数
-                else if (line.startsWith("核心线程数:")) {
-                    String value = line.substring(line.indexOf(":") + 1).trim();
-                    metrics.put("corePoolSize", Integer.parseInt(value));
-                }
-                
-                // 任务队列大小
-                else if (line.startsWith("任务队列大小:")) {
-                    String value = line.substring(line.indexOf(":") + 1).trim();
-                    metrics.put("queueSize", Integer.parseInt(value));
-                }
-            }
-        } catch (Exception e) {
-            System.err.println("解析监控报告时发生错误: " + e.getMessage());
-            return new HashMap<>(); // 返回空map，避免null导致的错误
-        }
-        
-        return metrics;
-    }
     
     /**
      * 生成测试用例

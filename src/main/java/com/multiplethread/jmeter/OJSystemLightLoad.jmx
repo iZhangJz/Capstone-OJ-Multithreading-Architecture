@@ -4,7 +4,7 @@
     <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="OJ系统轻负载测试计划 (新建)" enabled="true">
       <stringProp name="TestPlan.comments">测试在线判题系统在不同线程模型下的性能表现 - 轻负载 (20RPS目标)</stringProp>
       <boolProp name="TestPlan.functional_mode">false</boolProp>
-      <boolProp name="TestPlan.serialize_threadgroups">true</boolProp>
+      <boolProp name="TestPlan.serialize_threadgroups">false</boolProp>
       <elementProp name="TestPlan.user_defined_variables" elementType="Arguments" guiclass="ArgumentsPanel" testclass="Arguments" testname="用户定义的变量" enabled="true">
         <collectionProp name="Arguments.arguments"/>
       </elementProp>
@@ -203,6 +203,102 @@
           </hashTree>
         </hashTree>
       </hashTree>
+      
+      <!-- 添加资源监控线程组 -->
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="资源监控" enabled="true">
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="循环控制器" enabled="true">
+          <boolProp name="LoopController.continue_forever">true</boolProp>
+          <stringProp name="LoopController.loops">-1</stringProp>
+        </elementProp>
+        <stringProp name="ThreadGroup.num_threads">1</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">1</stringProp>
+        <boolProp name="ThreadGroup.scheduler">true</boolProp>
+        <stringProp name="ThreadGroup.duration">60</stringProp>
+        <stringProp name="ThreadGroup.delay">0</stringProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+      </ThreadGroup>
+      <hashTree>
+        <!-- 固定定时器，每秒采样一次 -->
+        <ConstantTimer guiclass="ConstantTimerGui" testclass="ConstantTimer" testname="固定定时器" enabled="true">
+          <stringProp name="ConstantTimer.delay">1000</stringProp>
+        </ConstantTimer>
+        <hashTree/>
+        
+        <!-- 监控资源的HTTP请求 -->
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="资源监控请求" enabled="true">
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="用户定义的变量" enabled="true">
+            <collectionProp name="Arguments.arguments"/>
+          </elementProp>
+          <stringProp name="HTTPSampler.domain">${host}</stringProp>
+          <stringProp name="HTTPSampler.port">${port}</stringProp>
+          <stringProp name="HTTPSampler.protocol">${protocol}</stringProp>
+          <stringProp name="HTTPSampler.path">/api/monitor/resources</stringProp>
+          <stringProp name="HTTPSampler.method">GET</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+          <boolProp name="HTTPSampler.BROWSER_COMPATIBLE_MULTIPART">false</boolProp>
+          <boolProp name="HTTPSampler.image_parser">false</boolProp>
+          <boolProp name="HTTPSampler.concurrentDwn">false</boolProp>
+          <stringProp name="HTTPSampler.concurrentPool">6</stringProp>
+          <boolProp name="HTTPSampler.md5">false</boolProp>
+          <intProp name="HTTPSampler.ipSourceType">0</intProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <!-- JSON提取器 -->
+          <JSONPostProcessor guiclass="JSONPostProcessorGui" testclass="JSONPostProcessor" testname="JSON提取器" enabled="true">
+            <stringProp name="JSONPostProcessor.referenceNames">timestamp;cpuUsage;systemMemoryUsage;jvmMemoryUsage</stringProp>
+            <stringProp name="JSONPostProcessor.jsonPathExprs">$.timestamp;$.cpuUsage;$.systemMemoryUsage;$.jvmMemoryUsage</stringProp>
+            <stringProp name="JSONPostProcessor.match_numbers">1;1;1;1</stringProp>
+            <stringProp name="JSONPostProcessor.defaultValues">0;0;0;0</stringProp>
+          </JSONPostProcessor>
+          <hashTree/>
+          
+          <!-- JSR223后置处理器，用于将数据写入CSV文件 -->
+          <JSR223PostProcessor guiclass="TestBeanGUI" testclass="JSR223PostProcessor" testname="JSR223后置处理器" enabled="true">
+            <stringProp name="cacheKey">true</stringProp>
+            <stringProp name="filename"></stringProp>
+            <stringProp name="parameters"></stringProp>
+            <stringProp name="script">// 获取 outputDir 属性，如果未设置则默认为当前目录 "."
+String outputDir = props.get("outputDir");
+if (outputDir == null || outputDir.isEmpty()) {
+    outputDir = "."; // 或者可以设置为JMeter的bin目录等，或者抛出错误
+    log.warn("JMeter property 'outputDir' is not set. Defaulting to current directory: " + new File(".").getAbsolutePath());
+}
+
+// 设置文件名，包含指定的输出目录
+String csvFileName = "jmeter_resource_metrics.csv";
+String fullPath = outputDir + System.getProperty("file.separator") + csvFileName;
+File file = new File(fullPath);
+
+// 如果文件不存在，创建并写入表头 (确保目录存在)
+File parentDir = file.getParentFile();
+if (parentDir != null &amp;&amp;  !parentDir.exists()) {
+    parentDir.mkdirs();
+}
+
+if (!file.exists()) {
+    FileWriter fw = new FileWriter(file);
+    fw.write("timestamp,cpuUsage,systemMemoryUsage,jvmMemoryUsage\n");
+    fw.close();
+}
+
+// 写入监控数据
+FileWriter fw = new FileWriter(file, true);
+String line = vars.get("timestamp") + "," + 
+            vars.get("cpuUsage") + "," + 
+            vars.get("systemMemoryUsage") + "," + 
+            vars.get("jvmMemoryUsage") + "\n";
+fw.write(line);
+fw.close();</stringProp>
+            <stringProp name="scriptLanguage">groovy</stringProp>
+          </JSR223PostProcessor>
+          <hashTree/>
+        </hashTree>
+      </hashTree>
+      
       <ResultCollector guiclass="SummaryReport" testclass="ResultCollector" testname="汇总报告 (新)" enabled="true">
         <boolProp name="ResultCollector.error_logging">false</boolProp>
         <objProp>

@@ -37,13 +37,17 @@ echo Start Time: %time%
 echo.
 
 
-call "%JMETER_CMD%" -n -t "OJSystemLightLoad.jmx" -l "results\light\light-load-results.jtl" -j "results\light\light-load-log.log"
+call "%JMETER_CMD%" -n -t "OJSystemLightLoad.jmx" -JoutputDir="results\light" -l "results\light\light-load-results.jtl" -j "results\light\light-load-log.log"
 if %errorlevel% neq 0 (
     echo Light load test error, error code: %errorlevel%
     exit /b %errorlevel%
 )
 
 REM Generate HTML report for light load test
+if exist "results\light\html" (
+    rd /s /q "results\light\html"
+)
+mkdir "results\light\html"
 call "%JMETER_CMD%" -g "results\light\light-load-results.jtl" -o "results\light\html"
 if %errorlevel% neq 0 (
     echo Light load HTML report generation error, error code: %errorlevel%
@@ -64,13 +68,17 @@ echo Start Time: %time%
 echo.
 
 
-call "%JMETER_CMD%" -n -t "OJSystemMediumLoad.jmx" -l "results\medium\medium-load-results.jtl" -j "results\medium\medium-load-log.log"
+call "%JMETER_CMD%" -n -t "OJSystemMediumLoad.jmx" -JoutputDir="results\medium" -l "results\medium\medium-load-results.jtl" -j "results\medium\medium-load-log.log"
 if %errorlevel% neq 0 (
     echo Medium load test error, error code: %errorlevel%
     exit /b %errorlevel%
 )
 
 REM Generate HTML report for medium load test
+if exist "results\medium\html" (
+    rd /s /q "results\medium\html"
+)
+mkdir "results\medium\html"
 call "%JMETER_CMD%" -g "results\medium\medium-load-results.jtl" -o "results\medium\html"
 if %errorlevel% neq 0 (
     echo Medium load HTML report generation error, error code: %errorlevel%
@@ -90,13 +98,17 @@ echo Step 3: Running Heavy Load Test (100-150 requests/second)
 echo Start Time: %time%
 echo.
 
-call "%JMETER_CMD%" -n -t "OJSystemHeavyLoad.jmx" -l "results\heavy\heavy-load-results.jtl" -j "results\heavy\heavy-load-log.log"
+call "%JMETER_CMD%" -n -t "OJSystemHeavyLoad.jmx" -JoutputDir="results\heavy" -l "results\heavy\heavy-load-results.jtl" -j "results\heavy\heavy-load-log.log"
 if %errorlevel% neq 0 (
     echo Heavy load test error, error code: %errorlevel%
     exit /b %errorlevel%
 )
 
 REM Generate HTML report for heavy load test
+if exist "results\heavy\html" (
+    rd /s /q "results\heavy\html"
+)
+mkdir "results\heavy\html"
 call "%JMETER_CMD%" -g "results\heavy\heavy-load-results.jtl" -o "results\heavy\html"
 if %errorlevel% neq 0 (
     echo Heavy load HTML report generation error, error code: %errorlevel%
