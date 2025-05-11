@@ -11,3 +11,4 @@ call-graph.tex
 src/main/resources
 .cursor/
 src/main/java/com/multiplethread/jmeter/results
+src/main/java/com/multiplethread/analysis/charts
