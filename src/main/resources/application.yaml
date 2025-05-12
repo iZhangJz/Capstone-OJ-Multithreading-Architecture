@@ -1,4 +1,6 @@
 server:
+  address: 192.168.188.65
+  port: 8080
   tomcat:
     threads:
       max: 1000 # 最大线程数

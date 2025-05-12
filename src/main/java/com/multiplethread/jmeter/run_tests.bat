@@ -6,8 +6,28 @@ REM JMeter Test Script for Online Judge System
 REM Run tests in order of light load, medium load, and heavy load
 REM Note: All test plans are controlled by duration (60 seconds) with pre-calculated sufficient loop counts
 
+REM 检查是否提供了主机和端口参数
+SET TARGET_HOST=%1
+SET TARGET_PORT=%2
+
+REM 如果未提供参数，则使用默认值
+IF "%TARGET_HOST%"=="" (
+    SET TARGET_HOST=localhost
+    echo 未指定主机地址，使用默认值: %TARGET_HOST%
+) ELSE (
+    echo 使用指定的主机地址: %TARGET_HOST%
+)
+
+IF "%TARGET_PORT%"=="" (
+    SET TARGET_PORT=8080
+    echo 未指定端口号，使用默认值: %TARGET_PORT%
+) ELSE (
+    echo 使用指定的端口号: %TARGET_PORT%
+)
+
 echo ======================================
 echo Performance Test for Online Judge System Starting
+echo 目标系统: %TARGET_HOST%:%TARGET_PORT%
 echo ======================================
 echo.
 
@@ -36,8 +56,8 @@ echo Step 1: Running Light Load Test (10-50 requests/second)
 echo Start Time: %time%
 echo.
 
-
-call "%JMETER_CMD%" -n -t "OJSystemLightLoad.jmx" -JoutputDir="results\light" -l "results\light\light-load-results.jtl" -j "results\light\light-load-log.log"
+REM 注意这里添加了 -Jhost 和 -Jport 参数
+call "%JMETER_CMD%" -n -t "OJSystemLightLoad.jmx" -Jhost="%TARGET_HOST%" -Jport="%TARGET_PORT%" -JoutputDir="results\light" -l "results\light\light-load-results.jtl" -j "results\light\light-load-log.log"
 if %errorlevel% neq 0 (
     echo Light load test error, error code: %errorlevel%
     exit /b %errorlevel%
@@ -67,8 +87,8 @@ echo Step 2: Running Medium Load Test (50-100 requests/second)
 echo Start Time: %time%
 echo.
 
-
-call "%JMETER_CMD%" -n -t "OJSystemMediumLoad.jmx" -JoutputDir="results\medium" -l "results\medium\medium-load-results.jtl" -j "results\medium\medium-load-log.log"
+REM 添加 -Jhost 和 -Jport 参数
+call "%JMETER_CMD%" -n -t "OJSystemMediumLoad.jmx" -Jhost="%TARGET_HOST%" -Jport="%TARGET_PORT%" -JoutputDir="results\medium" -l "results\medium\medium-load-results.jtl" -j "results\medium\medium-load-log.log"
 if %errorlevel% neq 0 (
     echo Medium load test error, error code: %errorlevel%
     exit /b %errorlevel%
@@ -98,7 +118,8 @@ echo Step 3: Running Heavy Load Test (100-150 requests/second)
 echo Start Time: %time%
 echo.
 
-call "%JMETER_CMD%" -n -t "OJSystemHeavyLoad.jmx" -JoutputDir="results\heavy" -l "results\heavy\heavy-load-results.jtl" -j "results\heavy\heavy-load-log.log"
+REM 添加 -Jhost 和 -Jport 参数
+call "%JMETER_CMD%" -n -t "OJSystemHeavyLoad.jmx" -Jhost="%TARGET_HOST%" -Jport="%TARGET_PORT%" -JoutputDir="results\heavy" -l "results\heavy\heavy-load-results.jtl" -j "results\heavy\heavy-load-log.log"
 if %errorlevel% neq 0 (
     echo Heavy load test error, error code: %errorlevel%
     exit /b %errorlevel%
@@ -123,6 +144,7 @@ echo.
 
 echo ======================================
 echo All tests completed!
+echo 测试目标: %TARGET_HOST%:%TARGET_PORT%
 echo Results saved in results directory
 echo HTML reports available in respective html folders
 echo ======================================

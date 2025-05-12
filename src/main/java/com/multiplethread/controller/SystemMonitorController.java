@@ -23,7 +23,6 @@ public class SystemMonitorController {
         result.put("cpuUsage", systemResourceMonitor.getProcessCpuUsage());
         result.put("systemMemoryUsage", systemResourceMonitor.getSystemMemoryUsage());
         result.put("jvmMemoryUsage", systemResourceMonitor.getJvmMemoryUsage());
-        System.out.println("resource");
         return result;
     }
 }
