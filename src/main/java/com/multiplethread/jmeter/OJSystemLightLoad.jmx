@@ -91,8 +91,8 @@
                   </elementProp>
                 </collectionProp>
               </elementProp>
-              <stringProp name="HTTPSampler.domain">${host}</stringProp>
-              <stringProp name="HTTPSampler.port">${port}</stringProp>
+              <stringProp name="HTTPSampler.domain">${__P(host, localhost)}</stringProp>
+              <stringProp name="HTTPSampler.port">${__P(port, 8080)}</stringProp>
               <stringProp name="HTTPSampler.protocol">${protocol}</stringProp>
               <stringProp name="HTTPSampler.path">/api/judge</stringProp>
               <stringProp name="HTTPSampler.method">POST</stringProp>
@@ -136,8 +136,8 @@
                   </elementProp>
                 </collectionProp>
               </elementProp>
-              <stringProp name="HTTPSampler.domain">${host}</stringProp>
-              <stringProp name="HTTPSampler.port">${port}</stringProp>
+              <stringProp name="HTTPSampler.domain">${__P(host, localhost)}</stringProp>
+              <stringProp name="HTTPSampler.port">${__P(port, 8080)}</stringProp>
               <stringProp name="HTTPSampler.protocol">${protocol}</stringProp>
               <stringProp name="HTTPSampler.path">/api/judge</stringProp>
               <stringProp name="HTTPSampler.method">POST</stringProp>
@@ -181,8 +181,8 @@
                   </elementProp>
                 </collectionProp>
               </elementProp>
-              <stringProp name="HTTPSampler.domain">${host}</stringProp>
-              <stringProp name="HTTPSampler.port">${port}</stringProp>
+              <stringProp name="HTTPSampler.domain">${__P(host, localhost)}</stringProp>
+              <stringProp name="HTTPSampler.port">${__P(port, 8080)}</stringProp>
               <stringProp name="HTTPSampler.protocol">${protocol}</stringProp>
               <stringProp name="HTTPSampler.path">/api/judge</stringProp>
               <stringProp name="HTTPSampler.method">POST</stringProp>
@@ -230,8 +230,8 @@
           <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="用户定义的变量" enabled="true">
             <collectionProp name="Arguments.arguments"/>
           </elementProp>
-          <stringProp name="HTTPSampler.domain">${host}</stringProp>
-          <stringProp name="HTTPSampler.port">${port}</stringProp>
+          <stringProp name="HTTPSampler.domain">${__P(host, localhost)}</stringProp>
+          <stringProp name="HTTPSampler.port">${__P(port, 8080)}</stringProp>
           <stringProp name="HTTPSampler.protocol">${protocol}</stringProp>
           <stringProp name="HTTPSampler.path">/api/monitor/resources</stringProp>
           <stringProp name="HTTPSampler.method">GET</stringProp>
