@@ -64,7 +64,7 @@ public class ThreadPoolManager {
                     args.getMaximumPoolSize(),
                     args.getKeepAliveTime(),
                     TimeUnit.SECONDS,
-                    new ArrayBlockingQueue<>(1000),
+                    new LinkedBlockingDeque<>(),
                     new JudgeThreadFactory("main-judge-pool"), // 指定名称
                     (r, executor) -> {
                         threadPoolMonitor.recordTaskRejection();

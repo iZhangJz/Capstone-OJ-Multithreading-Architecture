@@ -52,6 +52,22 @@ if not exist "results\medium\html" mkdir results\medium\html
 if not exist "results\heavy" mkdir results\heavy
 if not exist "results\heavy\html" mkdir results\heavy\html
 
+REM Delete old result files before starting new tests
+echo Deleting old JTL, LOG, and CSV result files...
+if exist "results\\light\\light-load-results.jtl" del /F /Q "results\\light\\light-load-results.jtl"
+if exist "results\\light\\light-load-log.log" del /F /Q "results\\light\\light-load-log.log"
+if exist "results\\light\\jmeter_resource_metrics.csv" del /F /Q "results\\light\\jmeter_resource_metrics.csv"
+
+if exist "results\\medium\\medium-load-results.jtl" del /F /Q "results\\medium\\medium-load-results.jtl"
+if exist "results\\medium\\medium-load-log.log" del /F /Q "results\\medium\\medium-load-log.log"
+if exist "results\\medium\\jmeter_resource_metrics.csv" del /F /Q "results\\medium\\jmeter_resource_metrics.csv"
+
+if exist "results\\heavy\\heavy-load-results.jtl" del /F /Q "results\\heavy\\heavy-load-results.jtl"
+if exist "results\\heavy\\heavy-load-log.log" del /F /Q "results\\heavy\\heavy-load-log.log"
+if exist "results\\heavy\\jmeter_resource_metrics.csv" del /F /Q "results\\heavy\\jmeter_resource_metrics.csv"
+echo Old result files deletion attempt complete.
+echo.
+
 echo Step 1: Running Light Load Test (10-50 requests/second)
 echo Start Time: %time%
 echo.
