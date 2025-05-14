@@ -120,7 +120,7 @@ public class JudgeController {
     @PostMapping("/api/judge")
     public Map<String, Object> judgeForJMeter(
             @RequestParam(defaultValue = "fast") String type,
-            @RequestParam(defaultValue = "4") int size) {
+            @RequestParam(defaultValue = "5") int size) {
         
         long startTime = System.currentTimeMillis();
         String threadModel = System.getProperty("oj.threadModel", "single");
@@ -130,7 +130,7 @@ public class JudgeController {
         switch(type) {
             case "medium":
                 // 中等计算任务使用适中规模的N皇后
-                nQueenSize = 10;
+                nQueenSize = 11;
                 break;
             case "heavy":
                 // 重度计算任务使用较大规模的N皇后
@@ -139,7 +139,7 @@ public class JudgeController {
             case "fast":
             default:
                 // 快速计算任务使用小规模的N皇后
-                nQueenSize = 8;
+                nQueenSize = 9;
         }
         
         // 生成指定数量的测试用例，每个用例使用相应规模的N皇后问题
@@ -185,6 +185,7 @@ public class JudgeController {
         response.put("requestId", System.currentTimeMillis()); // 提供给JMeter提取器的ID
         response.put("results", results);
         response.put("processingTime", processingTime); // 纯计算处理时间
+        response.put("executionTime",executionTime); // 执行用时
         response.put("mode", mode);
         response.put("type", type);
         response.put("nQueenSize", nQueenSize);

@@ -13,7 +13,7 @@ matplotlib.rcParams['axes.unicode_minus'] = False  # 用来正常显示负号
 
 def load_csv_data(csv_file_path):
     """
-    加载CSV文件并返回DataFrame
+    加载CSV文件并返回DataFrame，并对cpuUsage进行平滑处理
     """
     try:
         # 读取CSV文件
@@ -21,6 +21,15 @@ def load_csv_data(csv_file_path):
         
         # 将时间戳转换为日期时间格式
         df['datetime'] = pd.to_datetime(df['timestamp'], unit='ms')
+        
+        # 对cpuUsage进行移动中位数平滑处理，窗口大小为5
+        # center=True 会在窗口的中心计算中位数
+        # min_periods=1 确保即使窗口未满也能计算
+        if 'cpuUsage' in df.columns:
+            df['cpuUsage'] = df['cpuUsage'].rolling(window=5, center=True, min_periods=1).median()
+            # 填充可能产生的NaN值：先用后面的有效值填充 (bfill)，再用前面的有效值填充 (ffill)
+            # 这样可以确保首尾的数据点也被合理处理
+            df['cpuUsage'] = df['cpuUsage'].fillna(method='bfill').fillna(method='ffill')
         
         return df
     except Exception as e:
