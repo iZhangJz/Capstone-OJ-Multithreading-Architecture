@@ -120,7 +120,7 @@ public class JudgeController {
     @PostMapping("/api/judge")
     public Map<String, Object> judgeForJMeter(
             @RequestParam(defaultValue = "fast") String type,
-            @RequestParam(defaultValue = "5") int size) {
+            @RequestParam(defaultValue = "25") int size) {
         
         long startTime = System.currentTimeMillis();
         String threadModel = System.getProperty("oj.threadModel", "single");
@@ -130,11 +130,11 @@ public class JudgeController {
         switch(type) {
             case "medium":
                 // 中等计算任务使用适中规模的N皇后
-                nQueenSize = 11;
+                nQueenSize = 10;
                 break;
             case "heavy":
                 // 重度计算任务使用较大规模的N皇后
-                nQueenSize = 12;
+                nQueenSize = 11;
                 break;
             case "fast":
             default:
