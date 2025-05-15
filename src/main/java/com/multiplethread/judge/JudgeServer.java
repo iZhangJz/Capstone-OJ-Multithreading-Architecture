@@ -17,29 +17,71 @@ public class JudgeServer {
     private NQueen nQueenSolver;
 
     /**
-     * 运行评测 (兼容单线程和原始多线程)
+     * 运行评测。
+     * 当 useMultipleThread = true (对应 oj.threadModel=multiple):
+     *   为当前请求创建固定数量的原始线程 (非线程池)。
+     *   线程数量可通过系统属性 oj.multiple.corePoolSize 配置 (默认CPU核心数/2，最小为1)。
+     *   测试用例将平均分配给这些线程执行。
+     * 当 useMultipleThread = false (对应 oj.threadModel=single):
+     *   单线程串行执行所有测试用例。
+     *
      * @param cases 测试用例
-     * @param useMultipleThread 是否使用多线程 (非线程池)
+     * @param useMultipleThread 是否启用针对当前请求的多线程处理模式
      * @return 评测结果
      */
     public int[] runWithOriginalMultiThread(List<Integer> cases, boolean useMultipleThread) {
         int[] results = new int[cases.size()];
-        
+
         if (useMultipleThread) {
-            // 使用原始的多线程（非线程池）方式
-            List<Thread> threads = IntStream.range(0, cases.size())
-                .mapToObj(i -> new Thread(() -> results[i] = nQueenSolver.run(cases.get(i)))) 
-                .collect(Collectors.toList());
-            
-            threads.forEach(Thread::start);
-            threads.forEach(t -> {
+            // 读取可配置的线程数，默认为 CPU 核心数的一半，至少为1
+            int configuredThreadCount = Integer.getInteger("oj.multiple.corePoolSize", Math.max(1, Runtime.getRuntime().availableProcessors() / 2));
+            // 确保线程数不超过测试用例数，且至少为1
+            int actualThreadCount = Math.max(1, Math.min(configuredThreadCount, cases.size()));
+
+        
+
+            List<Thread> threads = new ArrayList<>(actualThreadCount);
+            int numCases = cases.size();
+
+            // 将测试用例平均分配给这些线程
+            for (int i = 0; i < actualThreadCount; i++) {
+                final int workerIndex = i;
+                Runnable workerTask = () -> {
+                    // 计算这个worker线程应该处理的case的起始和结束索引
+                    int startIndex = workerIndex * numCases / actualThreadCount;
+                    int endIndex = (workerIndex + 1) * numCases / actualThreadCount;
+                    if (workerIndex == actualThreadCount - 1) { // 最后一个worker处理剩余所有
+                        endIndex = numCases;
+                    }
+
+                    for (int j = startIndex; j < endIndex; j++) {
+                        try {
+                            results[j] = nQueenSolver.run(cases.get(j));
+                        } catch (Exception e) {
+                             // 考虑记录日志或将错误信息存入results特定标记
+                             System.err.println("原始线程执行 nQueenSolver.run 出错 (case: " + cases.get(j) + "): " + e.getMessage());
+                             // results[j] = -1; // 例如标记为错误
+                        }
+                    }
+                };
+                threads.add(new Thread(workerTask));
+            }
+
+            // 启动所有线程
+            for (Thread t : threads) {
+                t.start();
+            }
+
+            // 等待所有线程完成
+            for (Thread t : threads) {
                 try {
                     t.join();
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                    System.err.println("评测线程被中断");
+                    System.err.println("等待评测线程完成时被中断 (multiple mode - 原始线程)");
+                    // 可以选择重新尝试join或直接退出，取决于错误处理策略
                 }
-            });
+            }
         } else {
             // 单线程执行
             for (int i = 0; i < cases.size(); i++) {
@@ -206,3 +248,4 @@ public class JudgeServer {
         // ... existing code ...
     }
 }
+
