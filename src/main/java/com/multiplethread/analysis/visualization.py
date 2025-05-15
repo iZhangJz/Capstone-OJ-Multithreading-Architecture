@@ -6,6 +6,8 @@ from datetime import datetime
 import os
 import argparse
 import matplotlib
+import numpy as np
+from scipy.interpolate import interp1d
 
 # 设置中文字体支持
 matplotlib.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'SimSun', 'DejaVu Sans', 'Arial Unicode MS', 'sans-serif']
@@ -47,10 +49,25 @@ def visualize_metrics(df, title, output_dir):
     plt.figure(figsize=(12, 8))
     plt.title(f"{title} Performance Test Resource Metrics", fontsize=16)
     
+    # 将 datetime 转换为 matplotlib 可识别的数值格式
+    df['datetime_num'] = mdates.date2num(df['datetime'])
+
+    # 定义一个辅助函数来绘制平滑曲线
+    def plot_smooth(x, y, label, color, linestyle):
+        # 确保数据点足够进行插值
+        if len(x) > 3:  # 三次样条至少需要4个点
+            f_interp = interp1d(x, y, kind='cubic', fill_value="extrapolate")
+            x_smooth = np.linspace(x.min(), x.max(), 300) # 生成更密集的点
+            y_smooth = f_interp(x_smooth)
+            plt.plot(x_smooth, y_smooth, label=label, color=color, linestyle=linestyle)
+        else: # 如果点太少，则直接画线
+            plt.plot(x, y, label=label, color=color, linestyle=linestyle)
+
     # 在同一张图表上绘制三个指标，使用不同线型以便黑白打印区分
-    plt.plot(df['datetime'], df['cpuUsage'], label='CPU Usage', color='red', linestyle='-')
-    plt.plot(df['datetime'], df['systemMemoryUsage'], label='System Memory Usage', color='blue', linestyle='--')
-    plt.plot(df['datetime'], df['jvmMemoryUsage'], label='JVM Memory Usage', color='green', linestyle='-.')
+    # 使用原始的 df['datetime'] (会被自动转换为数值) 或 df['datetime_num']
+    plot_smooth(df['datetime_num'], df['cpuUsage'], label='CPU Usage', color='red', linestyle='-')
+    plot_smooth(df['datetime_num'], df['systemMemoryUsage'], label='System Memory Usage', color='blue', linestyle='--')
+    plot_smooth(df['datetime_num'], df['jvmMemoryUsage'], label='JVM Memory Usage', color='green', linestyle='-.')
     
     # 设置图表属性
     plt.ylabel('Usage (0-1)')

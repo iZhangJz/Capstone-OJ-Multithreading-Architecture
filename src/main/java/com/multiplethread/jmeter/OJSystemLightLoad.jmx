@@ -38,7 +38,7 @@
           <stringProp name="LoopController.loops">1</stringProp>
         </elementProp>
         <stringProp name="ThreadGroup.num_threads">20</stringProp>
-        <stringProp name="ThreadGroup.ramp_time">10</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">20</stringProp>
         <boolProp name="ThreadGroup.scheduler">true</boolProp>
         <stringProp name="ThreadGroup.duration">60</stringProp>
         <stringProp name="ThreadGroup.delay">0</stringProp>
@@ -84,7 +84,7 @@
                   </elementProp>
                   <elementProp name="size" elementType="HTTPArgument">
                     <boolProp name="HTTPArgument.always_encode">false</boolProp>
-                    <stringProp name="Argument.value">4</stringProp>
+                    <stringProp name="Argument.value">25</stringProp>
                     <stringProp name="Argument.metadata">=</stringProp>
                     <boolProp name="HTTPArgument.use_equals">true</boolProp>
                     <stringProp name="Argument.name">size</stringProp>
@@ -129,7 +129,7 @@
                   </elementProp>
                   <elementProp name="size" elementType="HTTPArgument">
                     <boolProp name="HTTPArgument.always_encode">false</boolProp>
-                    <stringProp name="Argument.value">8</stringProp>
+                    <stringProp name="Argument.value">25</stringProp>
                     <stringProp name="Argument.metadata">=</stringProp>
                     <boolProp name="HTTPArgument.use_equals">true</boolProp>
                     <stringProp name="Argument.name">size</stringProp>
@@ -174,7 +174,7 @@
                   </elementProp>
                   <elementProp name="size" elementType="HTTPArgument">
                     <boolProp name="HTTPArgument.always_encode">false</boolProp>
-                    <stringProp name="Argument.value">12</stringProp>
+                    <stringProp name="Argument.value">25</stringProp>
                     <stringProp name="Argument.metadata">=</stringProp>
                     <boolProp name="HTTPArgument.use_equals">true</boolProp>
                     <stringProp name="Argument.name">size</stringProp>
@@ -214,8 +214,8 @@
         <stringProp name="ThreadGroup.num_threads">1</stringProp>
         <stringProp name="ThreadGroup.ramp_time">1</stringProp>
         <boolProp name="ThreadGroup.scheduler">true</boolProp>
-        <stringProp name="ThreadGroup.duration">55</stringProp>
-        <stringProp name="ThreadGroup.delay">5000</stringProp> <!-- 5秒延迟启动 -->
+        <stringProp name="ThreadGroup.duration">57</stringProp>
+        <stringProp name="ThreadGroup.delay">3</stringProp> <!-- 3秒延迟启动 -->
         <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
       </ThreadGroup>
       <hashTree>

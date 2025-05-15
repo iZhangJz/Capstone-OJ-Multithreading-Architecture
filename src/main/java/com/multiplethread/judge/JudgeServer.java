@@ -76,9 +76,7 @@ public class JudgeServer {
             final int caseValue = cases.get(i);
             Runnable task = () -> {
                 try {
-                    Thread.sleep(10); // 模拟编译时间耗时
                     results[i] = nQueenSolver.run(caseValue);
-                    Thread.sleep(10); // 模拟持久化时间耗时
                 } catch (Exception e) {
                     System.err.println("任务执行出错 (case " + caseValue + "): " + e.getMessage());
                 } finally {
@@ -157,5 +155,54 @@ public class JudgeServer {
         }
         
         return results;
+    }
+
+    /**
+     * 使用固定大小线程池运行评测 (CPU核心数)
+     * @param cases 测试用例
+     * @return 评测结果
+     */
+    public int[] runWithFixedThreadPool(List<Integer> cases) {
+        int numCores = Runtime.getRuntime().availableProcessors();
+        // 创建一个固定大小的线程池，核心线程数和最大线程数都等于CPU核心数
+        // 使用 LinkedBlockingQueue 作为无界队列，但通常任务数是已知的 (cases.size())
+        // KeepAliveTime 对于核心线程数等于最大线程数的固定线程池通常不重要，但可以设置一个值
+        ThreadPoolExecutor fixedExecutor = new ThreadPoolExecutor(
+                numCores, 
+                numCores, 
+                60L, TimeUnit.SECONDS, 
+                new LinkedBlockingQueue<Runnable>()
+        );
+        
+        //System.out.println("使用固定大小线程池运行，大小: " + numCores);
+
+        int[] results = new int[cases.size()];
+        List<Future<?>> futures = new ArrayList<>();
+
+        for (int i = 0; i < cases.size(); i++) {
+            final int index = i;
+            final int caseValue = cases.get(i);
+            futures.add(fixedExecutor.submit(() -> results[index] = nQueenSolver.run(caseValue)));
+        }
+
+        waitForFutures(futures);
+
+        // 关闭线程池
+        fixedExecutor.shutdown();
+        try {
+            if (!fixedExecutor.awaitTermination(60, TimeUnit.SECONDS)) {
+                fixedExecutor.shutdownNow();
+            }
+        } catch (InterruptedException ie) {
+            fixedExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+
+        return results;
+    }
+
+    // 辅助方法，用于等待所有Future完成
+    private void waitForFutures(List<Future<?>> futures) {
+        // ... existing code ...
     }
 }

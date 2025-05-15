@@ -193,9 +193,9 @@ public class JudgeController {
         response.put("threadModel", threadModel);
         
         // 如果使用动态线程池，添加详细的监控报告和关键性能指标
-        if (monitorReport != null) {
-            response.put("monitorReport", monitorReport);
-        }
+        // if (monitorReport != null) {
+        //     response.put("monitorReport", monitorReport);
+        // }
         
         return response;
     }

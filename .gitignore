@@ -11,3 +11,9 @@ call-graph.tex
 .cursor/
 src/main/java/com/multiplethread/jmeter/results
 src/main/java/com/multiplethread/analysis/charts
+/src/main/java/com/multiplethread/jmeter/results-multiple/
+/src/main/java/com/multiplethread/jmeter/results-dynamic/
+/src/main/java/com/multiplethread/jmeter/results-single/
+/src/main/java/com/multiplethread/analysis/dynamic-report/
+/src/main/java/com/multiplethread/analysis/multiple-report/
+/src/main/java/com/multiplethread/analysis/single-report/
