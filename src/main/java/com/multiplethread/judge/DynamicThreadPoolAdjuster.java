@@ -2,202 +2,254 @@ package com.multiplethread.judge;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.annotation.EnableScheduling;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
 
-import javax.annotation.Resource;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.text.DecimalFormat; // For precise formatting if needed
 
 /**
- * 动态调整线程池参数的组件
+ * 动态调整线程池参数的组件, 现在为每个线程池实例工作。
  */
-@Component
-@EnableScheduling // 启用 Spring 的计划任务执行
 public class DynamicThreadPoolAdjuster {
 
     private static final Logger log = LoggerFactory.getLogger(DynamicThreadPoolAdjuster.class);
+    private static final DecimalFormat dfPercent = new DecimalFormat("#.##");
+    private static final DecimalFormat dfGamma = new DecimalFormat("#.###");
+
+    // 核心线程数限制 - 改为 public 以便外部访问
+    public static final int MIN_CORE_POOL_SIZE = 2;
+    public static final int MAX_CORE_POOL_SIZE = 8; // 每个请求的线程池最大核心线程数
 
     // 资源竞争系数阈值
     private static final double GAMMA_THRESHOLD = 0.3;
-    // 获取 CPU 核心数
-    private static final int CPU_CORES = Runtime.getRuntime().availableProcessors();
-    // 低并发时的核心线程数比例（例如 CPU 核心的 50%）
-    private static final double LOW_CONCURRENCY_CORE_RATIO = 0.5;
+    // 获取 CPU 核心数 - 这个可能仍然有用，用于比较，但不是硬性限制池大小
+    private static final int SYSTEM_CPU_CORES = Runtime.getRuntime().availableProcessors();
     // 线性增加步长（每次增加的核心线程数）
     private static final int CORE_POOL_INCREMENT_STEP = 1;
     // CPU利用率高阈值（超过此值认为系统CPU负载较高）
-    private static final double HIGH_CPU_THRESHOLD = 0.8; // 80%
+    private static final double HIGH_CPU_THRESHOLD = 1; // 80%
     // CPU利用率低阈值（低于此值认为系统CPU负载较低）
     private static final double LOW_CPU_THRESHOLD = 0.2; // 20%
     // 内存利用率高阈值（超过此值认为系统内存压力较大）
     private static final double HIGH_MEMORY_THRESHOLD = 0.8; // 80%
 
-    @Resource
-    private ThreadPoolManager threadPoolManager;
+    // New thresholds for queue-based adjustments when no tasks completed in interval
+    private static final int QUEUE_SIZE_TO_CORE_RATIO_FOR_INCREASE = 2; // If queue size is 2x core size
+    private static final double CPU_THRESHOLD_FOR_QUEUE_INCREASE = 0.75; // 75% CPU, don't increase if higher
+    private static final double MEMORY_THRESHOLD_FOR_QUEUE_INCREASE = 0.85; // 85% Memory, don't increase if higher
 
-    @Resource
-    private ThreadPoolMonitor threadPoolMonitor;
+    private final ThreadPoolExecutor executorService; // 要调整的线程池
+    private final ThreadPoolMonitor threadPoolMonitor; // 监控特定线程池的实例
+    private final SystemResourceMonitor systemResourceMonitor; // 系统资源监控器 (可以共享)
+    private final ScheduledExecutorService scheduler;
+    private final String poolName; // 用于日志记录，区分不同请求的线程池
 
-    @Resource
-    private SystemResourceMonitor systemResourceMonitor;
+    // 将调整间隔从秒改为毫秒，并设定为500ms
+    private static final long ADJUST_INTERVAL_MILLIS = 500; // 调整间隔为500毫秒
 
-    /**
-     * 定时任务，定期检查并调整线程池参数
-     * fixedDelayString = "PT5S" 表示每隔 5 秒执行一次
-     */
-    @Scheduled(fixedDelayString = "PT5S") // 使用 ISO 8601 持续时间格式
-    public void adjustThreadPool() {
-        ThreadPoolExecutor executor = threadPoolManager.getMainExecutor();
-        if (executor == null || executor.isShutdown()) {
-            log.warn("主线程池未初始化或已关闭，跳过调整。");
-            return;
-        }
-
-        // 获取系统资源利用率
-        // double systemCpuUsage = systemResourceMonitor.getSystemCpuUsage();
-        double processCpuUsage = systemResourceMonitor.getProcessCpuUsage();
-        double systemMemoryUsage = systemResourceMonitor.getSystemMemoryUsage();
-
-        // 获取线程池性能指标
-        long avgWaitTime = threadPoolMonitor.getAverageWaitTime();
-        long avgExecTime = threadPoolMonitor.getAverageExecutionTime();
-        long taskCount = threadPoolMonitor.getTotalTasks(); // 使用 getter 方法
-
-        // 如果周期内没有任务，则基于系统资源利用率进行调整
-        if (taskCount == 0) {
-            log.info("监控周期内无任务执行，基于系统资源利用率进行调整。");
-            // adjustBasedOnSystemResources(executor, systemCpuUsage, systemMemoryUsage);
-            adjustBasedOnSystemResources(executor, processCpuUsage, systemMemoryUsage);
-            // 重置监控器以便下一个周期准确计算
-            threadPoolMonitor.reset();
-            return;
-        }
-
-        double gamma = (avgExecTime > 0) ? (double) avgWaitTime / avgExecTime : 0.0;
-
-        log.info("线程池调整检查：AvgWaitTime={}ms, AvgExecTime={}ms, Gamma={}, Tasks={}, ProcessCPU={}, Memory={}",
-                 avgWaitTime, avgExecTime, String.format("%.3f", gamma), taskCount,
-                 // String.format("%.2f%%", systemCpuUsage * 100),
-                 String.format("%.2f%%", processCpuUsage * 100),
-                 String.format("%.2f%%", systemMemoryUsage * 100));
-
-        int currentCoreSize = executor.getCorePoolSize();
-        int currentMaxSize = executor.getMaximumPoolSize(); // 当前最大线程数
-        int targetCoreSize = currentCoreSize; // 默认保持不变
-        int targetMaxSize = currentMaxSize;   // 默认保持不变
-
-        // 综合考虑资源竞争系数和系统资源利用率
-        if (gamma > GAMMA_THRESHOLD) {
-            // 高并发状态：线性增加核心线程数，但需要考虑CPU和内存利用率
-            // if (systemCpuUsage > HIGH_CPU_THRESHOLD || systemMemoryUsage > HIGH_MEMORY_THRESHOLD) {
-            if (processCpuUsage > HIGH_CPU_THRESHOLD || systemMemoryUsage > HIGH_MEMORY_THRESHOLD) {
-                // 系统资源已经很紧张，不宜增加线程数
-                log.info("高并发状态，但系统资源紧张 (ProcessCPU: {}%, Memory: {}%)，保持当前线程数。",
-                        // String.format("%.2f", systemCpuUsage * 100),
-                        String.format("%.2f", processCpuUsage * 100),
-                        String.format("%.2f", systemMemoryUsage * 100));
-            } else if (currentCoreSize < CPU_CORES) {
-                // 系统资源充足，可以增加线程数
-                targetCoreSize = Math.min(currentCoreSize + CORE_POOL_INCREMENT_STEP, CPU_CORES);
-                log.info("高并发状态 (γ > {})，系统资源充足，增加核心线程数至: {}", GAMMA_THRESHOLD, targetCoreSize);
-            } else {
-                log.info("高并发状态，核心线程数已达 CPU 核心数 ({})，不再增加。", CPU_CORES);
-            }
-            // 在高并发时，可以考虑将最大线程数也设置为 CPU 核心数，以更快响应峰值
-            targetMaxSize = CPU_CORES;
-
-        } else {
-            // 低并发状态：设置核心线程数为 CPU 核心数的一定比例，但需要考虑CPU利用率
-            // if (systemCpuUsage < LOW_CPU_THRESHOLD) {
-            if (processCpuUsage < LOW_CPU_THRESHOLD) {
-                // CPU利用率很低，可以更激进地减少线程数
-                int lowConcurrencyTarget = Math.max(1, (int) (CPU_CORES * LOW_CONCURRENCY_CORE_RATIO / 2));
-                if (currentCoreSize > lowConcurrencyTarget) {
-                    targetCoreSize = lowConcurrencyTarget;
-                    log.info("低并发状态且ProcessCPU利用率低 ({}%)，减少核心线程数至: {}",
-                            // String.format("%.2f", systemCpuUsage * 100),
-                            String.format("%.2f", processCpuUsage * 100), targetCoreSize);
-                }
-            } else {
-                // 正常的低并发状态
-                int lowConcurrencyTarget = Math.max(1, (int) (CPU_CORES * LOW_CONCURRENCY_CORE_RATIO));
-                if (currentCoreSize > lowConcurrencyTarget) { // 如果当前核心线程数大于低并发目标值
-                    targetCoreSize = lowConcurrencyTarget; // 设置目标核心线程数为低并发目标值
-                    log.info("低并发状态 (γ <= {})，尝试减少核心线程数至: {}", GAMMA_THRESHOLD, targetCoreSize);
-                } else {
-                    log.info("低并发状态，核心线程数 ({}) 已低于或等于目标值 ({})，不再减少。", currentCoreSize, lowConcurrencyTarget);
-                }
-            }
-            // 低并发时，最大线程数可以保持不变或也适当降低，这里我们保持为 CPU 核心数，允许一定的突发
-            targetMaxSize = CPU_CORES;
-        }
-
-        // 应用调整（仅当目标值与当前值不同时）
-        if (targetCoreSize != currentCoreSize) {
-            log.warn("动态调整核心线程数：{} -> {}", currentCoreSize, targetCoreSize);
-            executor.setCorePoolSize(targetCoreSize);
-        }
-        if (targetMaxSize != currentMaxSize) {
-            // 确保 maximumPoolSize 不小于 corePoolSize
-            if (targetMaxSize < targetCoreSize) { // 如果目标最大线程数小于目标核心线程数
-                targetMaxSize = targetCoreSize; // 调整为目标核心线程数
-                log.warn("目标最大线程数 ({}) 小于目标核心线程数 ({})，调整为 {}。",
-                         currentMaxSize, targetCoreSize, targetMaxSize);
-            }
-            log.warn("动态调整最大线程数：{} -> {}", currentMaxSize, targetMaxSize);
-            executor.setMaximumPoolSize(targetMaxSize);
-        }
-
-        // 重置监控器以便下一个周期准确计算
-        threadPoolMonitor.reset();
+    public DynamicThreadPoolAdjuster(String poolName, ThreadPoolExecutor executorService, ThreadPoolMonitor threadPoolMonitor, SystemResourceMonitor systemResourceMonitor) {
+        this.poolName = poolName != null ? poolName : "DynamicPool";
+        this.executorService = executorService;
+        this.threadPoolMonitor = threadPoolMonitor; // 这个 monitor 实例是为 executorService 服务的
+        this.systemResourceMonitor = systemResourceMonitor;
+        this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, this.poolName + "-AdjusterThread");
+            t.setDaemon(true); // 将调度线程设置为守护线程
+            return t;
+        });
     }
 
-    /**
-     * 基于系统资源利用率调整线程池参数
-     * 当没有任务执行时，仅根据系统资源状况进行调整
-     * @param executor 线程池执行器
-     * @param cpuUsage CPU利用率 (现在代表进程CPU利用率)
-     * @param memoryUsage 内存利用率
-     */
-    private void adjustBasedOnSystemResources(ThreadPoolExecutor executor, double cpuUsage, double memoryUsage) {
-        int currentCoreSize = executor.getCorePoolSize();
-        int currentMaxSize = executor.getMaximumPoolSize();
-        int targetCoreSize = currentCoreSize; // 默认保持不变
-        int targetMaxSize = currentMaxSize;   // 默认保持不变
+    public void start() {
+        if (scheduler.isShutdown()) {
+            log.warn("[{}] 调度器已关闭，无法启动。", poolName);
+            return;
+        }
+        log.info("[{}] 启动动态线程池调整器。最小核心线程数={}, 最大核心线程数={}, 调整间隔={}ms",
+                poolName, MIN_CORE_POOL_SIZE, MAX_CORE_POOL_SIZE, ADJUST_INTERVAL_MILLIS);
+        this.scheduler.scheduleWithFixedDelay(this::adjustThreadPoolInternal, ADJUST_INTERVAL_MILLIS, ADJUST_INTERVAL_MILLIS, TimeUnit.MILLISECONDS);
+    }
 
-        log.info("基于系统资源调整线程池：ProcessCPU利用率={}%, 内存利用率={}%",
-                String.format("%.2f", cpuUsage * 100),
-                String.format("%.2f", memoryUsage * 100));
-
-        // 根据CPU利用率调整
-        if (cpuUsage > HIGH_CPU_THRESHOLD) {
-            // CPU利用率高，减少线程数以减轻CPU负担
-            int reducedTarget = Math.max(1, (int) (CPU_CORES * LOW_CONCURRENCY_CORE_RATIO));
-            if (currentCoreSize > reducedTarget) {
-                targetCoreSize = reducedTarget;
-                log.info("ProcessCPU利用率高 ({}%)，减少核心线程数至: {}",
-                        String.format("%.2f", cpuUsage * 100), targetCoreSize);
-            }
-        } else if (cpuUsage < LOW_CPU_THRESHOLD && memoryUsage < HIGH_MEMORY_THRESHOLD) {
-            // CPU和内存利用率都低，可以适当增加线程数以备突发负载
-            if (currentCoreSize < CPU_CORES) {
-                targetCoreSize = Math.min(currentCoreSize + 1, (int)(CPU_CORES * LOW_CONCURRENCY_CORE_RATIO));
-                log.info("系统资源充足，适当增加核心线程数至: {}", targetCoreSize);
+    public void shutdown() {
+        log.info("[{}] 正在关闭动态线程池调整器。", poolName);
+        if (!scheduler.isShutdown()) {
+            scheduler.shutdown();
+            try {
+                if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                    scheduler.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                scheduler.shutdownNow();
+                Thread.currentThread().interrupt();
             }
         }
+        log.info("[{}] 调度器已成功关闭。", poolName);
+    }
 
-        // 应用调整（仅当目标值与当前值不同时）
-        if (targetCoreSize != currentCoreSize) {
-            log.warn("基于系统资源动态调整核心线程数：{} -> {}", currentCoreSize, targetCoreSize);
-            executor.setCorePoolSize(targetCoreSize);
+    // 原 @Scheduled 方法，现在是内部调用
+    private void adjustThreadPoolInternal() {
+        if (scheduler.isShutdown() || executorService == null || executorService.isShutdown() || executorService.isTerminating()) {
+            if (!scheduler.isShutdown()) { // if scheduler is still running but executor is not usable
+                 log.warn("[{}] 执行器不可用 (null, shutdown or terminating)，正在停止调度器。", poolName);
+                 this.shutdown(); // Stop this adjuster's scheduler
+            } else {
+                 log.warn("[{}] 调度器自身已关闭，跳过调整。", poolName);
+            }
+            return;
         }
 
-        // 最大线程数保持为CPU核心数
-        if (targetMaxSize != CPU_CORES) {
-            targetMaxSize = CPU_CORES;
-            log.warn("调整最大线程数至CPU核心数：{} -> {}", currentMaxSize, targetMaxSize);
-            executor.setMaximumPoolSize(targetMaxSize);
+        try {
+            performAdjustment();
+        } catch (Exception e) {
+            log.error("[{}] 线程池调整过程中出错: {}", poolName, e.getMessage(), e);
         }
+    }
+
+    private void performAdjustment() {
+        // Ensure monitor is valid before using
+        if (threadPoolMonitor == null) {
+            log.error("[{}] ThreadPoolMonitor 为 null，无法执行调整。", poolName);
+            return;
+        }
+        
+        double processCpuUsage = systemResourceMonitor.getProcessCpuUsage();
+        double systemMemoryUsage = systemResourceMonitor.getSystemMemoryUsage();
+        
+        // Statistics from the monitor for the last interval (assuming reset clears them for next interval)
+        long avgWaitTime = threadPoolMonitor.getAverageWaitTime(); // Assuming these are from last interval after reset
+        long avgExecTime = threadPoolMonitor.getAverageExecutionTime();
+        long tasksCompletedInInterval = threadPoolMonitor.getTotalTasks(); // Assuming this is tasks *since last reset*
+
+        int currentCoreSize = executorService.getCorePoolSize();
+        int queueSize = executorService.getQueue().size();
+        int activeThreads = executorService.getActiveCount();
+        int calculatedTargetCoreSize = currentCoreSize;
+
+        log.debug("[{}] 检查调整: 当前核心数={}, 队列任务数={}, 活跃线程数={}, 上周期完成任务数={}, CPU={}%, Mem={}%",
+                poolName, currentCoreSize, queueSize, activeThreads, tasksCompletedInInterval,
+                dfPercent.format(processCpuUsage * 100), dfPercent.format(systemMemoryUsage * 100));
+
+        if (tasksCompletedInInterval > 0) {
+            double gamma = (avgExecTime > 0) ? (double) avgWaitTime / avgExecTime : (avgWaitTime > 0 ? Double.MAX_VALUE : 0.0);
+
+            log.info("[{}] 调整检查 (有任务完成): 平均等待={}ms, 平均执行={}ms, Gamma={}, 完成任务数={}, CPU={}%, Mem={}%",
+                    poolName, avgWaitTime, avgExecTime, dfGamma.format(gamma), tasksCompletedInInterval,
+                    dfPercent.format(processCpuUsage * 100), dfPercent.format(systemMemoryUsage * 100));
+
+            if (gamma > GAMMA_THRESHOLD) {
+                if (processCpuUsage > HIGH_CPU_THRESHOLD || systemMemoryUsage > HIGH_MEMORY_THRESHOLD) {
+                    log.info("[{}] 高 Gamma (>{}), 但系统资源紧张 (CPU: {}%, Mem: {}%). 保持核心线程数: {}.",
+                            poolName, dfGamma.format(GAMMA_THRESHOLD), dfPercent.format(processCpuUsage * 100),
+                            dfPercent.format(systemMemoryUsage * 100), currentCoreSize);
+                } else if (currentCoreSize < MAX_CORE_POOL_SIZE) {
+                    calculatedTargetCoreSize = Math.min(currentCoreSize + CORE_POOL_INCREMENT_STEP, MAX_CORE_POOL_SIZE);
+                    log.info("[{}] 高 Gamma (>{}), 资源充足. 增加核心线程数从 {} 到 {}.",
+                            poolName, dfGamma.format(GAMMA_THRESHOLD), currentCoreSize, calculatedTargetCoreSize);
+                } else {
+                    log.info("[{}] 高 Gamma (>{}), 但核心线程数 ({}) 已达最大值 {}. 不增加.",
+                            poolName, dfGamma.format(GAMMA_THRESHOLD), currentCoreSize, MAX_CORE_POOL_SIZE);
+                }
+            } else { // gamma <= GAMMA_THRESHOLD
+                if (processCpuUsage < LOW_CPU_THRESHOLD) {
+                    if (currentCoreSize > MIN_CORE_POOL_SIZE) {
+                        calculatedTargetCoreSize = Math.max(MIN_CORE_POOL_SIZE, currentCoreSize - CORE_POOL_INCREMENT_STEP);
+                        log.info("[{}] 低 Gamma (≤{}), CPU利用率低 ({}%). 减少核心线程数从 {} 到 {}.",
+                                poolName, dfGamma.format(GAMMA_THRESHOLD), dfPercent.format(processCpuUsage * 100), currentCoreSize, calculatedTargetCoreSize);
+                    } else {
+                        log.info("[{}] 低 Gamma (≤{}), CPU利用率低, 但核心线程数 ({}) 已是最小值 {}. 不变更.",
+                                poolName, dfGamma.format(GAMMA_THRESHOLD), currentCoreSize, MIN_CORE_POOL_SIZE);
+                    }
+                } else {
+                    int moderateTarget = Math.max(MIN_CORE_POOL_SIZE, MAX_CORE_POOL_SIZE / 2);
+                    if (currentCoreSize > moderateTarget) {
+                        calculatedTargetCoreSize = Math.max(moderateTarget, currentCoreSize - CORE_POOL_INCREMENT_STEP);
+                        log.info("[{}] 低 Gamma (≤{}), CPU利用率中等 ({}%). 当前核心 {} > 适中目标 {}. 减少到 {}.",
+                                poolName, dfGamma.format(GAMMA_THRESHOLD), dfPercent.format(processCpuUsage * 100), currentCoreSize, moderateTarget, calculatedTargetCoreSize);
+                    } else {
+                        log.info("[{}] 低 Gamma (≤{}), CPU利用率中等. 核心线程数 ({}) ≤ 适中目标 {}. 不变更.",
+                                poolName, dfGamma.format(GAMMA_THRESHOLD), currentCoreSize, moderateTarget);
+                    }
+                }
+            }
+        } else { // tasksCompletedInInterval == 0
+            if (queueSize > 0 || activeThreads > 0) {
+                log.info("[{}] 上周期无任务完成, 但队列中有 {} 个任务或 {} 个活跃线程. CPU: {}%, Mem: {}%.",
+                        poolName, queueSize, activeThreads, dfPercent.format(processCpuUsage * 100), dfPercent.format(systemMemoryUsage * 100));
+                // Strategy: If queue is significantly backlogged and resources allow, consider a small increase
+                if (queueSize > currentCoreSize * QUEUE_SIZE_TO_CORE_RATIO_FOR_INCREASE &&
+                    currentCoreSize < MAX_CORE_POOL_SIZE &&
+                    processCpuUsage < CPU_THRESHOLD_FOR_QUEUE_INCREASE &&
+                    systemMemoryUsage < MEMORY_THRESHOLD_FOR_QUEUE_INCREASE) {
+                    
+                    calculatedTargetCoreSize = Math.min(currentCoreSize + CORE_POOL_INCREMENT_STEP, MAX_CORE_POOL_SIZE);
+                    if (calculatedTargetCoreSize > currentCoreSize) {
+                        log.info("[{}] 队列积压 ({} 任务) 且资源允许 (CPU {}% < {}%, Mem {}% < {}%). 尝试增加核心线程数从 {} 到 {}.",
+                                poolName, queueSize,
+                                dfPercent.format(processCpuUsage * 100), dfPercent.format(CPU_THRESHOLD_FOR_QUEUE_INCREASE * 100),
+                                dfPercent.format(systemMemoryUsage * 100), dfPercent.format(MEMORY_THRESHOLD_FOR_QUEUE_INCREASE * 100),
+                                currentCoreSize, calculatedTargetCoreSize);
+                    } else {
+                        // Reset to current if no increase happens, to avoid unintended shrink by falling through
+                        calculatedTargetCoreSize = currentCoreSize; 
+                    }
+                } else {
+                    log.info("[{}] 队列积压或有活跃线程，但未满足主动增加条件 (队列比:{}, CPU:{}, Mem:{}) 或已达最大核心数. 保持核心线程数: {}.",
+                            poolName, (currentCoreSize > 0 ? (double)queueSize/currentCoreSize : (queueSize > 0 ? "Inf" : "0")), // Avoid division by zero if currentCoreSize is 0
+                            dfPercent.format(processCpuUsage*100), dfPercent.format(systemMemoryUsage*100), currentCoreSize);
+                    calculatedTargetCoreSize = currentCoreSize; // Maintain current size
+                }
+            } else { // Truly idle: tasksCompletedInInterval == 0, queueSize == 0, activeThreads == 0
+                log.info("[{}] 线程池真正空闲 (无完成任务, 队列为空, 无活跃线程). CPU: {}%, Mem: {}%.",
+                        poolName, dfPercent.format(processCpuUsage * 100), dfPercent.format(systemMemoryUsage * 100));
+                if (currentCoreSize > MIN_CORE_POOL_SIZE) {
+                     // Only shrink if CPU usage is also low, to avoid shrinking if system is busy due to other factors
+                    if (processCpuUsage < LOW_CPU_THRESHOLD) { // Use existing LOW_CPU_THRESHOLD
+                        calculatedTargetCoreSize = MIN_CORE_POOL_SIZE; // Shrink more aggressively to min if truly idle and low CPU
+                        log.info("[{}] 空闲且CPU利用率低. 缩减核心线程数从 {} 到最小值 {}.", poolName, currentCoreSize, calculatedTargetCoreSize);
+                    } else {
+                        log.info("[{}] 空闲但CPU利用率 ({}%) 不低. 保持核心线程数 {}.", poolName, dfPercent.format(processCpuUsage*100), currentCoreSize);
+                        calculatedTargetCoreSize = currentCoreSize; // Maintain current size
+                    }
+                } else {
+                    log.info("[{}] 空闲: 核心线程数 ({}) 已是最小值 {}. 不变更.", poolName, currentCoreSize, MIN_CORE_POOL_SIZE);
+                    calculatedTargetCoreSize = currentCoreSize; // Ensure it stays at min
+                }
+            }
+        }
+
+        int finalTargetPoolSize = Math.max(MIN_CORE_POOL_SIZE, Math.min(calculatedTargetCoreSize, MAX_CORE_POOL_SIZE));
+
+        int currentActualCoreSize = executorService.getCorePoolSize();
+        int currentActualMaxSize = executorService.getMaximumPoolSize();
+
+        if (finalTargetPoolSize == currentActualCoreSize && finalTargetPoolSize == currentActualMaxSize) {
+            // log.debug("[{}] 目标线程数 {} 与当前核心数 {} 及最大数 {} 相同，无需调整。", poolName, finalTargetPoolSize, currentActualCoreSize, currentActualMaxSize);
+        } else {
+             log.info("[{}] 计算出的最终目标核心/最大线程数: {}. 当前核心: {}, 当前最大: {}.", poolName, finalTargetPoolSize, currentActualCoreSize, currentActualMaxSize);
+            // Apply adjustment logic
+            if (currentActualMaxSize < finalTargetPoolSize) {
+                log.info("[{}] 调整前: 设置最大线程数从 {} 到 {}.", poolName, currentActualMaxSize, finalTargetPoolSize);
+                executorService.setMaximumPoolSize(finalTargetPoolSize);
+            }
+            
+            if (currentActualCoreSize != finalTargetPoolSize) {
+                log.info("[{}] 调整中: 设置核心线程数从 {} 到 {}.", poolName, currentActualCoreSize, finalTargetPoolSize);
+                executorService.setCorePoolSize(finalTargetPoolSize);
+            }
+
+            // Ensure current maximum is at least new core size, and align with finalTargetPoolSize
+            if (executorService.getMaximumPoolSize() < executorService.getCorePoolSize() || executorService.getMaximumPoolSize() != finalTargetPoolSize) {
+                int newMax = Math.max(executorService.getCorePoolSize(), finalTargetPoolSize);
+                 if (executorService.getMaximumPoolSize() != newMax) {
+                    log.info("[{}] 调整后: 同步最大线程数从 {} 到 {}.", poolName, executorService.getMaximumPoolSize(), newMax);
+                    executorService.setMaximumPoolSize(newMax);
+                 }
+            }
+        }
+        
+        // Reset monitor statistics for the next interval.
+        // This is crucial for `tasksCompletedInInterval` to reflect the count *since last adjustment*.
+        threadPoolMonitor.reset();
     }
 }

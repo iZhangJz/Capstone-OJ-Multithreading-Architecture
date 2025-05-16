@@ -2,9 +2,7 @@ package com.multiplethread.judge;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
 
-import javax.annotation.Resource;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicLong;
@@ -13,13 +11,11 @@ import java.util.concurrent.atomic.AtomicLong;
  * 线程池监控类
  * 用于收集线程池的性能指标 (使用纳秒精度)
  */
-@Component
 public class ThreadPoolMonitor {
 
     private static final Logger log = LoggerFactory.getLogger(ThreadPoolMonitor.class);
 
-    @Resource
-    private SystemResourceMonitor systemResourceMonitor;
+    private final SystemResourceMonitor systemResourceMonitor;
 
     // 任务执行计数器
     final AtomicLong totalTasks = new AtomicLong(0);
@@ -36,16 +32,20 @@ public class ThreadPoolMonitor {
     // 任务异常计数器
     private final AtomicLong failedTasks = new AtomicLong(0);
 
+    public ThreadPoolMonitor(SystemResourceMonitor systemResourceMonitor) {
+        this.systemResourceMonitor = systemResourceMonitor;
+    }
+
     /**
      * 记录任务执行时间和等待时间 (纳秒)
      * @param executionTimeNanos 执行时间（纳秒）
      * @param waitTimeNanos 等待时间（纳秒）
      */
     public void recordTaskTimings(long executionTimeNanos, long waitTimeNanos) {
-        log.debug("Recording task timings: ExecutionTimeNanos = {}ns, WaitTimeNanos = {}ns", executionTimeNanos, waitTimeNanos);
+        log.debug("记录任务时间: 执行时间纳秒 = {}纳秒, 等待时间纳秒 = {}纳秒", executionTimeNanos, waitTimeNanos);
 
         if (executionTimeNanos < 0 || waitTimeNanos < 0) {
-             log.warn("Received negative timing value: ExecutionTimeNanos={}, WaitTimeNanos={}. Ignoring this record.", executionTimeNanos, waitTimeNanos);
+             log.warn("收到负时间值: 执行时间纳秒={}, 等待时间纳秒={}. 忽略此记录。", executionTimeNanos, waitTimeNanos);
              return;
         }
 
@@ -53,7 +53,7 @@ public class ThreadPoolMonitor {
         long currentTotalExecTime = totalExecutionTimeNanos.addAndGet(executionTimeNanos);
         long currentTotalWaitTime = totalWaitTimeNanos.addAndGet(waitTimeNanos);
 
-        log.trace("Updated totals: Tasks={}, TotalExecTimeNanos={}, TotalWaitTimeNanos={}",
+        log.trace("更新总计: 任务数={}, 总执行时间纳秒={}, 总等待时间纳秒={}",
                  currentTaskCount, currentTotalExecTime, currentTotalWaitTime);
 
         // --- 更新最大/最小执行时间 (以毫秒为单位) ---
@@ -85,7 +85,7 @@ public class ThreadPoolMonitor {
      */
     public void recordTaskRejection() {
         long count = rejectedTasks.incrementAndGet();
-        log.warn("Task rejected. Total rejected count: {}", count);
+        log.warn("任务被拒绝。总拒绝数: {}", count);
     }
 
     /**
@@ -93,14 +93,14 @@ public class ThreadPoolMonitor {
      */
     public void recordTaskFailure() {
         long count = failedTasks.incrementAndGet();
-        log.error("Task failed. Total failure count: {}", count);
+        log.error("任务失败。总失败数: {}", count);
     }
 
     /**
      * 记录任务超时
      */
     public void recordTaskTimeout() {
-        log.warn("Task timed out and was interrupted");
+        log.warn("任务超时并被中断");
         // 任务超时也算作失败
         recordTaskFailure();
     }
@@ -109,7 +109,7 @@ public class ThreadPoolMonitor {
      * 重置监控数据
      */
     public void reset() {
-        log.info("Resetting ThreadPoolMonitor statistics.");
+        log.info("重置线程池监控统计数据。");
         totalTasks.set(0);
         totalExecutionTimeNanos.set(0); // Reset nanos
         totalWaitTimeNanos.set(0);    // Reset nanos
@@ -184,10 +184,10 @@ public class ThreadPoolMonitor {
             systemMemoryUsage = systemResourceMonitor.getSystemMemoryUsage();
             jvmMemoryUsage = systemResourceMonitor.getJvmMemoryUsage();
         } else {
-            log.warn("systemResourceMonitor为null，无法获取系统资源利用率");
+            log.warn("系统资源监控器为空（应该已被注入），无法获取系统资源使用情况报告。");
         }
 
-        log.debug("Generating report: AvgExecTimeMillis={}, AvgWaitTimeMillis={}, Gamma={}, TaskCount={}, CPU={}, Memory={}",
+        log.debug("生成报告: 平均执行时间毫秒={}, 平均等待时间毫秒={}, Gamma={}, 任务数={}, CPU={}, 内存={}",
                   avgExecTimeMillis, avgWaitTimeMillis, String.format("%.3f", gamma), taskCount,
                   String.format("%.2f%%", systemCpuUsage * 100), String.format("%.2f%%", systemMemoryUsage * 100));
 

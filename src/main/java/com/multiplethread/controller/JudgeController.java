@@ -1,12 +1,9 @@
 package com.multiplethread.controller;
 
 import com.multiplethread.judge.JudgeServer;
-import com.multiplethread.judge.ThreadPoolManager;
-import com.multiplethread.model.ThreadPoolArgs;
+import com.multiplethread.judge.JudgeServer.DynamicExecutionResult;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
-
-import javax.annotation.PostConstruct;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -25,19 +22,6 @@ public class JudgeController {
 
     @Autowired
     private JudgeServer judgeServer;
-
-    @Autowired
-    private ThreadPoolManager threadPoolManager;
-
-    /**
-     * 初始化主线程池
-     */
-    @PostConstruct
-    public void initializeThreadPool() {
-        System.out.println("Initializing main thread pool in JudgeController...");
-        threadPoolManager.initializeMainExecutor(ThreadPoolArgs.DYNAMIC_INITIAL);
-        System.out.println("Main thread pool initialized.");
-    }
 
     /**
      * 单线程评测
@@ -95,17 +79,15 @@ public class JudgeController {
         long startTime = System.currentTimeMillis();
         
         List<Integer> cases = generateTestCases(n);
-        int[] results = judgeServer.runWithDynamicThreadPool(cases);
+        DynamicExecutionResult dynamicResult = judgeServer.runWithDynamicThreadPool(cases);
         
         long executionTime = System.currentTimeMillis() - startTime;
         
-        String report = threadPoolManager.getMainThreadPoolStatusReport();
-        
         Map<String, Object> response = new HashMap<>();
-        response.put("results", results);
-        response.put("executionTime", executionTime);
-        response.put("mode", "dynamic-pool");
-        response.put("monitorReport", report);
+        response.put("结果", dynamicResult.results);
+        response.put("执行时间", executionTime);
+        response.put("模式", "动态线程池");
+        response.put("监控报告", dynamicResult.monitorReport);
         
         return response;
     }
@@ -125,24 +107,19 @@ public class JudgeController {
         long startTime = System.currentTimeMillis();
         String threadModel = System.getProperty("oj.threadModel", "single");
         
-        // 根据任务类型确定N皇后问题的规模
         int nQueenSize;
         switch(type) {
             case "medium":
-                // 中等计算任务使用适中规模的N皇后
                 nQueenSize = 10;
                 break;
             case "heavy":
-                // 重度计算任务使用较大规模的N皇后
-                nQueenSize = 11;
+                nQueenSize = 12;
                 break;
             case "fast":
             default:
-                // 快速计算任务使用小规模的N皇后
                 nQueenSize = 9;
         }
         
-        // 生成指定数量的测试用例，每个用例使用相应规模的N皇后问题
         List<Integer> cases = new ArrayList<>();
         for (int i = 0; i < size; i++) {
             cases.add(nQueenSize);
@@ -152,54 +129,46 @@ public class JudgeController {
         String mode;
         String monitorReport = null;
         
-        // 记录任务开始执行的时间（用于计算处理性能指标）
         long executionStartTime = System.currentTimeMillis();
         
-        // 根据系统属性参数选择线程处理模型
         switch(threadModel) {
             case "multiple":
-                // 使用常规多线程模型
                 results = judgeServer.runWithOriginalMultiThread(cases, true);
                 mode = "multiple-thread";
                 break;
             case "dynamic":
-                // 使用动态线程池模型
-                results = judgeServer.runWithDynamicThreadPool(cases);
+                DynamicExecutionResult dynamicResult = judgeServer.runWithDynamicThreadPool(cases);
+                results = dynamicResult.results;
                 mode = "dynamic-pool";
-                // 获取线程池监控报告
-                monitorReport = threadPoolManager.getMainThreadPoolStatusReport();
+                monitorReport = dynamicResult.monitorReport;
                 break;
             case "single":
             default:
-                // 使用单线程模型
                 results = judgeServer.runWithOriginalMultiThread(cases, false);
                 mode = "single-thread";
         }
         
-        // 记录任务结束时间
         long executionEndTime = System.currentTimeMillis();
         long executionTime = executionEndTime - startTime;
         long processingTime = executionEndTime - executionStartTime;
         
         Map<String, Object> response = new HashMap<>();
-        response.put("requestId", System.currentTimeMillis()); // 提供给JMeter提取器的ID
-        response.put("results", results);
-        response.put("processingTime", processingTime); // 纯计算处理时间
-        response.put("executionTime",executionTime); // 执行用时
-        response.put("mode", mode);
-        response.put("type", type);
-        response.put("nQueenSize", nQueenSize);
-        response.put("size", size);
-        response.put("threadModel", threadModel);
+        response.put("请求ID", System.currentTimeMillis());
+        response.put("结果", results);
+        response.put("处理时间", processingTime);
+        response.put("执行时间", executionTime);
+        response.put("模式", mode);
+        response.put("类型", type);
+        response.put("N皇后大小", nQueenSize);
+        response.put("规模", size);
+        response.put("线程模型", threadModel);
         
-        // 如果使用动态线程池，添加详细的监控报告和关键性能指标
-        // if (monitorReport != null) {
-        //     response.put("monitorReport", monitorReport);
-        // }
+        if (monitorReport != null) {
+            response.put("监控报告", monitorReport);
+        }
         
         return response;
     }
-    
     
     /**
      * 生成测试用例

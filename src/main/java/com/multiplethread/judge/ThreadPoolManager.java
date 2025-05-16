@@ -1,191 +1,53 @@
 package com.multiplethread.judge;
 
-import com.multiplethread.model.ThreadPoolArgs;
-// import jakarta.annotation.PreDestroy; // 使用 javax 替代
-import javax.annotation.PreDestroy;     // 导入 javax.annotation.PreDestroy
-import javax.annotation.Resource;
-
+// All imports related to mainExecutor, ThreadPoolArgs, specific executors, etc. can be removed if not used.
+// import com.multiplethread.model.ThreadPoolArgs;
+// import javax.annotation.PreDestroy;
+// import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
+// import java.util.concurrent.*;
+// import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 线程池管理类
- * 负责创建和管理应用主线程池，并提供任务提交接口
+ * (职责已大幅缩减，原主线程池已移除)
  */
 @Component
 public class ThreadPoolManager {
 
-    @Resource
-    private ThreadPoolMonitor threadPoolMonitor;
+    // private ThreadPoolMonitor internalMonitor; // Removed
+    // private final SystemResourceMonitor systemResourceMonitor; // Removed if not used elsewhere
 
-    // 持有主线程池实例
-    private ThreadPoolExecutor mainExecutor;
-    
-    // 超时检查器线程池
-    private ScheduledExecutorService timeoutExecutor;
-    
-    // 线程工厂，用于创建线程并命名
-    private static class JudgeThreadFactory implements ThreadFactory {
-        private static final AtomicInteger poolNumber = new AtomicInteger(1);
-        private final ThreadGroup group;
-        private final AtomicInteger threadNumber = new AtomicInteger(1);
-        private final String namePrefix;
-        
-        JudgeThreadFactory(String poolName) { // 允许指定线程池名称
-            SecurityManager s = System.getSecurityManager();
-            group = (s != null) ? s.getThreadGroup() : Thread.currentThread().getThreadGroup();
-            namePrefix = poolName + "-" + poolNumber.getAndIncrement() + "-thread-";
-        }
-        
-        @Override
-        public Thread newThread(Runnable r) {
-            Thread t = new Thread(group, r, namePrefix + threadNumber.getAndIncrement(), 0);
-            if (t.isDaemon()) {
-                t.setDaemon(false);
-            }
-            if (t.getPriority() != Thread.NORM_PRIORITY) {
-                t.setPriority(Thread.NORM_PRIORITY);
-            }
-            return t;
-        }
-    }
-    
-    /**
-     * 创建并初始化应用主线程池
-     * @param args 线程池参数
-     * @return 初始化的线程池
-     */
-    public synchronized ThreadPoolExecutor initializeMainExecutor(ThreadPoolArgs args) {
-        if (this.mainExecutor == null || this.mainExecutor.isShutdown()) {
-            this.mainExecutor = new ThreadPoolExecutor(
-                    args.getCorePoolSize(),
-                    args.getMaximumPoolSize(),
-                    args.getKeepAliveTime(),
-                    TimeUnit.SECONDS,
-                    new LinkedBlockingDeque<>(),
-                    new JudgeThreadFactory("main-judge-pool"), // 指定名称
-                    (r, executor) -> {
-                        threadPoolMonitor.recordTaskRejection();
-                         throw new RejectedExecutionException("Task " + r.toString() +
-                                                          " rejected from " +
-                                                          executor.toString());
-                    }
-            );
-            
-            // 初始化超时检查器线程池
-            if (this.timeoutExecutor == null || this.timeoutExecutor.isShutdown()) {
-                this.timeoutExecutor = Executors.newScheduledThreadPool(
-                    2, // 只需要少量线程进行超时检查
-                    new JudgeThreadFactory("timeout-checker-pool")
-                );
-            }
-        } else {
-            System.out.println("主线程池已初始化。");
-        }
-        return this.mainExecutor;
+    // private ThreadPoolExecutor mainExecutor; // Removed
+    // private ScheduledExecutorService timeoutExecutor; // Removed
+
+    // Constructor can be simplified or removed if no dependencies
+    // @Autowired
+    // public ThreadPoolManager(SystemResourceMonitor systemResourceMonitor) {
+    //     // this.systemResourceMonitor = systemResourceMonitor; // Removed if internalMonitor is removed
+    // }
+ 
+    public ThreadPoolManager() {
+        // Default constructor if no dependencies are needed now
+        System.out.println("ThreadPoolManager initialized (no main executor).");
     }
 
-    /**
-     * 获取主线程池实例
-     * @return ThreadPoolExecutor 实例，如果未初始化则返回 null
-     */
-    public ThreadPoolExecutor getMainExecutor() {
-        return mainExecutor;
-    }
+    // JudgeThreadFactory class removed as mainExecutor and timeoutExecutor are removed.
 
-    /**
-     * 提交任务到主线程池
-     * @param task 要执行的任务
-     */
-    public void submitTask(Runnable task) {
-        ThreadPoolExecutor executor = getMainExecutor();
-        if (executor == null || executor.isShutdown()) {
-            System.err.println("主线程池未初始化或已关闭，无法提交任务");
-            // 实际应用中应考虑更健壮的处理，例如初始化或抛出特定异常
-            return;
-        }
-        long submissionTimeNanos = System.nanoTime();
-        MonitoredTask monitoredTask = new MonitoredTask(task, submissionTimeNanos, threadPoolMonitor);
-        try {
-            executor.execute(monitoredTask);
-        } catch (RejectedExecutionException e) {
-            System.err.println("任务提交被拒绝: " + e.getMessage());
-        }
-    }
-    
-    /**
-     * 提交带超时的任务到主线程池
-     * @param task 要执行的任务
-     * @param timeoutMillis 超时时间（毫秒）
-     */
-    public void submitTaskWithTimeout(Runnable task, long timeoutMillis) {
-        ThreadPoolExecutor executor = getMainExecutor();
-        if (executor == null || executor.isShutdown()) {
-            System.err.println("主线程池未初始化或已关闭，无法提交任务");
-            return;
-        }
-        
-        // 确保超时检查器线程池已初始化
-        if (this.timeoutExecutor == null || this.timeoutExecutor.isShutdown()) {
-            this.timeoutExecutor = Executors.newScheduledThreadPool(
-                2,
-                new JudgeThreadFactory("timeout-checker-pool")
-            );
-        }
-        
-        long submissionTimeNanos = System.nanoTime();
-        TimedTask timedTask = new TimedTask(task, submissionTimeNanos, threadPoolMonitor, 
-                                          timeoutMillis, timeoutExecutor);
-        try {
-            executor.execute(timedTask);
-        } catch (RejectedExecutionException e) {
-            System.err.println("任务提交被拒绝: " + e.getMessage());
-        }
-    }
-    
-    /**
-     * 关闭主线程池（在应用关闭时调用）
-     */
-    @PreDestroy
-    public void shutdownMainExecutor() {
-        shutdownThreadPool(this.mainExecutor);
-        shutdownThreadPool(this.timeoutExecutor);
-    }
+    // initializeMainExecutor method removed.
 
-    /**
-     * 通用关闭线程池方法
-     * @param executor 线程池
-     */
-    private void shutdownThreadPool(ExecutorService executor) { // 改为 private
-        if (executor != null && !executor.isShutdown()) {
-            System.out.println("开始关闭线程池: " + executor);
-            executor.shutdown();
-            try {
-                if (!executor.awaitTermination(60, TimeUnit.SECONDS)) {
-                    System.err.println("线程池未在60秒内关闭，强制关闭。");
-                    executor.shutdownNow();
-                } else {
-                    System.out.println("线程池已成功关闭。");
-                }
-            } catch (InterruptedException e) {
-                System.err.println("关闭线程池被中断，强制关闭。");
-                executor.shutdownNow();
-                Thread.currentThread().interrupt();
-            }
-        }
-    }
+    // getMainExecutor method removed.
+
+    // submitTask method removed.
     
-    /**
-     * 获取主线程池状态报告
-     * @return 状态报告字符串
-     */
-    public String getMainThreadPoolStatusReport() {
-        ThreadPoolExecutor executor = getMainExecutor();
-        if (executor == null) {
-            return "主线程池未初始化";
-        }
-        return threadPoolMonitor.getReport(executor);
-    }
+    // submitTaskWithTimeout method removed.
+    
+    // shutdownMainExecutor method removed (PreDestroy).
+
+    // shutdownThreadPool helper method removed.
+    
+    // getMainThreadPoolStatusReport method removed.
+
+    // If this class has no responsibilities left, it could be a candidate for complete removal later.
 } 

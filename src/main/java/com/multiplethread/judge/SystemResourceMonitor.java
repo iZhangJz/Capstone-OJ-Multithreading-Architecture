@@ -27,7 +27,7 @@ public class SystemResourceMonitor {
     // 构造函数
     public SystemResourceMonitor() {
         this.osMXBean = (OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
-        log.info("SystemResourceMonitor initialized");
+        log.info("系统资源监控器已初始化");
     }
     
     /**
@@ -39,14 +39,14 @@ public class SystemResourceMonitor {
         
         // 如果返回负值或0，可能是首次调用或无法获取
         if (cpuUsage < 0.0) {
-            log.debug("Unable to get system CPU usage, returning last known value: {}", lastSystemCpuUsage);
+            log.debug("无法获取系统CPU使用率，返回上次已知值: {}", lastSystemCpuUsage);
             return lastSystemCpuUsage;
         }
         
         // 更新最后一次有效的系统CPU利用率
         lastSystemCpuUsage = cpuUsage;
         
-        log.debug("Current system CPU usage: {}", cpuUsage);
+        log.debug("当前系统CPU使用率: {}", cpuUsage);
         return cpuUsage;
     }
     
@@ -59,14 +59,14 @@ public class SystemResourceMonitor {
         
         // 如果返回负值，表示无法获取，返回上一次的值
         if (processCpu < 0.0) {
-            log.warn("Unable to get process CPU usage, returning last known value: {}", lastProcessCpuUsage);
+            log.warn("无法获取进程CPU使用率，返回上次已知值: {}", lastProcessCpuUsage);
             return lastProcessCpuUsage;
         }
         
         // 更新最后一次有效的进程CPU利用率
         lastProcessCpuUsage = processCpu;
         
-        log.debug("Current process CPU usage: {}", processCpu);
+        log.debug("当前进程CPU使用率: {}", processCpu);
         return processCpu;
     }
     
@@ -79,13 +79,12 @@ public class SystemResourceMonitor {
         long freeMemory = osMXBean.getFreePhysicalMemorySize();
         
         if (totalMemory <= 0) {
-            log.warn("Invalid total memory size: {}", totalMemory);
+            log.warn("无效的总内存大小: {}", totalMemory);
             return 0.0;
         }
         
         double memoryUsage = (double)(totalMemory - freeMemory) / totalMemory;
-        log.debug("Current system memory usage: {} (Total: {}, Free: {})", 
-                 String.format("%.3f", memoryUsage), totalMemory, freeMemory);
+        log.debug("当前系统内存使用率: {} (总内存: {}, 可用内存: {})",                  String.format("%.3f", memoryUsage), totalMemory, freeMemory);
         
         return memoryUsage;
     }
@@ -106,8 +105,7 @@ public class SystemResourceMonitor {
         // 相对于最大可用内存的使用率
         double memoryUsage = (double) usedMemory / maxMemory;
         
-        log.debug("Current JVM memory usage: {} (Used: {}, Max: {})", 
-                 String.format("%.3f", memoryUsage), usedMemory, maxMemory);
+        log.debug("当前JVM内存使用率: {} (已用: {}, 最大: {})",                  String.format("%.3f", memoryUsage), usedMemory, maxMemory);
         
         return memoryUsage;
     }
