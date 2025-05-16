@@ -48,14 +48,14 @@ public class MonitoredTask implements Runnable {
     @Override
     public void run() {
         // Log entry
-        log.trace("MonitoredTask run() started for: {}", actualTask);
+        log.trace("监控任务开始运行: {}", actualTask);
         long startTimeNanos = System.nanoTime();
         long waitTimeNanos = startTimeNanos - submissionTimeNanos;
         try {
             actualTask.run();
         } catch (Throwable t) {
             // Log failure before recording
-            log.error("Task execution failed for: {}", actualTask, t);
+            log.error("任务执行失败: {}", actualTask, t);
             // 添加空指针检查
             if (monitor != null) {
                 monitor.recordTaskFailure();
@@ -70,13 +70,12 @@ public class MonitoredTask implements Runnable {
             // long waitMillis = TimeUnit.NANOSECONDS.toMillis(waitTimeNanos); // No longer needed here
 
             // Log calculated times before recording
-            log.debug("MonitoredTask finished. WaitNanos: {}, ExecNanos: {}. Calling recordTaskTimings (with nanos).",
-                     waitTimeNanos, executionTimeNanos);
+            log.debug("监控任务完成。等待纳秒: {}, 执行纳秒: {}。调用记录任务时间 (使用纳秒)。",                     waitTimeNanos, executionTimeNanos);
 
             // Pass nanosecond values directly to the monitor (添加空指针检查)
             if (monitor != null) {
                 monitor.recordTaskTimings(executionTimeNanos, waitTimeNanos);
-                log.trace("Called monitor.recordTaskTimings for: {}", actualTask);
+                log.trace("已调用monitor.recordTaskTimings，用于: {}", actualTask);
             } else {
                 log.error("监控器为null，无法记录任务时间");
             }

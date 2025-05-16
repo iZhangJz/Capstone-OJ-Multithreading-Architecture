@@ -1,10 +1,8 @@
 package com.multiplethread.judge;
 import java.util.*;
 import java.util.concurrent.*;
-import com.multiplethread.model.ThreadPoolArgs;
 import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
